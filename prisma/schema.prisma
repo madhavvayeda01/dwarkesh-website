@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  fullName    String
+  companyName String?
+  email       String?
+  phone       String
+  message     String?
+  createdAt   DateTime @default(now())
+}
+
+model Client {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+
+  logoUrl       String?
+  address       String?
+  contactNumber String?
+
+  createdAt     DateTime @default(now())
+
+  employees     Employee[]
+  templates     DocumentTemplate[]
+}
+
+model Employee {
+  id       String @id @default(cuid())
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // ====== EMPLOYEE MASTER FULL FIELDS ======
+
+  empNo     String?
+  fileNo    String?
+  pfNo      String?
+  uanNo     String?
+  esicNo    String?
+
+  firstName          String?
+  surName            String?
+  fatherSpouseName   String?
+  fullName           String?
+
+  designation  String?
+  currentDept  String?
+  salaryWage   String?
+
+  dob           String?
+  doj           String?
+  dor           String?
+  reasonForExit String?
+
+  panNo             String?
+  aadharNo          String?
+  elcIdNo           String?
+  drivingLicenceNo  String?
+
+  bankAcNo   String?
+  ifscCode   String?
+  bankName   String?
+
+  mobileNumber        String?
+  gender              String?
+  religion            String?
+  nationality         String?
+  typeOfEmployment    String?
+  maritalStatus       String?
+  educationQualification String?
+  experienceInRelevantField String?
+
+  presentAddress   String?
+  permanentAddress String?
+  village          String?
+  thana            String?
+  subDivision      String?
+  postOffice       String?
+  district         String?
+  state            String?
+  pinCode          String?
+  temporaryAddress String?
+
+  nominee1Name       String?
+  nominee1Relation   String?
+  nominee1BirthDate  String?
+  nominee1Age        String?
+  nominee1Proportion String?
+
+  nominee2Name       String?
+  nominee2Relation   String?
+  nominee2BirthDate  String?
+  nominee2Age        String?
+  nominee2Proportion String?
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+}
+
+model DocumentGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  templates DocumentTemplate[]
+}
+
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  groupId   String
+  group     DocumentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title     String
+  fileUrl   String
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([groupId])
+}
