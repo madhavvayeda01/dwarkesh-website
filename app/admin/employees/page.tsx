@@ -23,8 +23,9 @@ export default function AdminEmployeesPage() {
     async function checkLogin() {
       const res = await fetch("/api/admin/me");
       const data = await res.json();
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
 
-      if (!data.loggedIn) {
+      if (!loggedIn) {
         window.location.href = "/signin";
       }
     }
@@ -54,8 +55,9 @@ export default function AdminEmployeesPage() {
     setLoading(true);
     const res = await fetch("/api/admin/employees");
     const data = await res.json();
+    const payload = data?.data ?? data;
 
-    setEmployees(data.employees || []);
+    setEmployees(payload.employees || []);
     setLoading(false);
   }
 

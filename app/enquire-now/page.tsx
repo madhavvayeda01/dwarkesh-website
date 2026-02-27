@@ -34,14 +34,14 @@ export default function EnquireNowPage() {
         return;
       }
 
-      setStatus("✅ Enquiry submitted successfully!");
+      setStatus("Enquiry submitted successfully!");
       setFullName("");
       setCompanyName("");
       setEmail("");
       setPhone("");
       setMessage("");
     } catch (err) {
-      setStatus("❌ Server error. Try again.");
+      setStatus("Server error. Try again.");
     }
   }
 
@@ -115,3 +115,5 @@ export default function EnquireNowPage() {
     </main>
   );
 }
+
+

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
-import * as XLSX from "xlsx";
 
 type Employee = {
   id: string;
@@ -88,6 +87,20 @@ type PayrollCalc = {
 
 const STANDARD_DAYS = 26;
 const MIN_RATE_T = 21060;
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 function toNumber(value: string | null | undefined, fallback = 0): number {
   if (!value) return fallback;
@@ -95,6 +108,10 @@ function toNumber(value: string | null | undefined, fallback = 0): number {
   if (!normalized) return fallback;
   const num = Number(normalized);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeCode(value: string | null | undefined): string {
+  return String(value || "").trim().toUpperCase().replace(/^0+/, "");
 }
 
 function round0(value: number): number {
@@ -231,19 +248,54 @@ export default function ClientPayrollPage() {
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
+  const today = new Date();
+  const [payrollMonth, setPayrollMonth] = useState<number>(today.getMonth());
+  const [payrollYear, setPayrollYear] = useState<number>(today.getFullYear());
+
+  async function applyAdvanceForPeriod(month: number, year: number) {
+    const res = await fetch(
+      `/api/client/advance/amounts?month=${month}&year=${year}`,
+      { cache: "no-store" }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return;
+
+    const payload = data?.data ?? data;
+    const amounts = (payload?.amounts || {}) as Record<string, number>;
+    setRows((prev) =>
+      prev.map((row) => {
+        const code = normalizeCode(row.empNo);
+        const nextAdv = code && Number.isFinite(amounts[code]) ? amounts[code] : 0;
+        return row.adv === nextAdv ? row : { ...row, adv: nextAdv };
+      })
+    );
+  }
 
   useEffect(() => {
     async function checkLogin() {
       const res = await fetch("/api/client/me");
       const data = await res.json();
-      if (!data.loggedIn) window.location.href = "/signin";
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
+      if (!loggedIn) window.location.href = "/signin";
+      const accessRes = await fetch("/api/client/modules?module=payroll", { cache: "no-store" });
+      const accessData = await accessRes.json().catch(() => ({}));
+      if (!accessRes.ok || !accessData?.data?.enabled) {
+        setModuleEnabled(false);
+        setLoading(false);
+        return false;
+      }
+      setModuleEnabled(true);
+      return true;
     }
 
     async function loadEmployees() {
       setLoading(true);
       const res = await fetch("/api/client/employees", { cache: "no-store" });
       const data = await res.json();
-      const employees: Employee[] = data.employees || [];
+      const payload = data?.data ?? data;
+      const employees: Employee[] = payload.employees || [];
 
       setRows(
         employees.map((employee, index) => ({
@@ -274,8 +326,13 @@ export default function ClientPayrollPage() {
       setLoading(false);
     }
 
-    checkLogin();
-    loadEmployees();
+    async function init() {
+      const canLoad = await checkLogin();
+      if (!canLoad) return;
+      await loadEmployees();
+      await applyAdvanceForPeriod(payrollMonth, payrollYear);
+    }
+    init();
   }, []);
 
   function updateInput<K extends keyof PayrollInputs>(
@@ -292,88 +349,181 @@ export default function ClientPayrollPage() {
     () => rows.map((row) => ({ row, calc: calcPayroll(row) })),
     [rows]
   );
+  const payrollTotals = useMemo(
+    () =>
+      computed.reduce(
+        (acc, { row, calc }) => {
+          acc.actualRateOfPay += row.actualRateOfPay;
+          acc.actualWorkingDays += row.actualWorkingDays;
+          acc.payDays += calc.payDaysAB;
+          acc.basic += calc.basicAK;
+          acc.hra += calc.hraAL;
+          acc.total += calc.totalAN;
+          acc.otAmount += calc.otAmountAO;
+          acc.grandTotal += calc.grandTotalAP;
+          acc.pf += calc.pfAQ;
+          acc.esic += calc.esicAR;
+          acc.profTax += calc.profTaxAS;
+          acc.tds += row.tds;
+          acc.loan += row.loan;
+          acc.adv += row.adv;
+          acc.tea += row.tea;
+          acc.lwf += row.lwf;
+          acc.totalDeduction += calc.totalDeductionAY;
+          acc.netPayable += calc.netPayableAZ;
+          acc.totalFinal += calc.totalBE;
+          return acc;
+        },
+        {
+          actualRateOfPay: 0,
+          actualWorkingDays: 0,
+          payDays: 0,
+          basic: 0,
+          hra: 0,
+          total: 0,
+          otAmount: 0,
+          grandTotal: 0,
+          pf: 0,
+          esic: 0,
+          profTax: 0,
+          tds: 0,
+          loan: 0,
+          adv: 0,
+          tea: 0,
+          lwf: 0,
+          totalDeduction: 0,
+          netPayable: 0,
+          totalFinal: 0,
+        }
+      ),
+    [computed]
+  );
+  const yearOptions = useMemo(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 11 }, (_, index) => current - 5 + index);
+  }, []);
+  const selectedMonthLabel = MONTHS[payrollMonth];
 
-  function exportFinalExcel() {
+  async function generatePayroll() {
     if (!computed.length) {
       setStatus("No payroll rows to export.");
       return;
     }
+    setStatus("Generating payroll and saving...");
 
-    // Final export hides helper(red) and input(yellow/green) columns.
-    const headers = [
-      "Sr #",
-      "Emp Code",
-      "UAN Number",
-      "ESIC Number",
-      "Name Of Employee",
-      "Depart.",
-      "Desig.",
-      "DOJ",
-      "Pay Days",
-      "Basic",
-      "HRA",
-      "TOTAL",
-      "OT Amount",
-      "GRAND TOTAL",
-      "PF",
-      "ESIC",
-      "Prof Tax",
-      "Total Deduction",
-      "Net Payable",
-      "SIGNATURE",
-      "A/C NO.",
-      "IFSC CODE",
-      "BANK NAME",
-      "TOTAL",
-    ];
+    const payloadRows = computed.map(({ row, calc }) => ({
+      srNo: row.srNo,
+      employeeId: row.id,
+      empCode: row.empNo,
+      uanNo: String(row.uanNo || ""),
+      esicNo: String(row.esicNo || ""),
+      employeeName: row.employeeName,
+      department: row.department,
+      designation: row.designation,
+      doj: row.doj,
+      payDays: calc.payDaysAB,
+      basic: calc.basicAK,
+      hra: calc.hraAL,
+      total: calc.totalAN,
+      otAmount: calc.otAmountAO,
+      grandTotal: calc.grandTotalAP,
+      pf: calc.pfAQ,
+      esic: calc.esicAR,
+      profTax: calc.profTaxAS,
+      totalDeduction: calc.totalDeductionAY,
+      netPayable: calc.netPayableAZ,
+      signature: calc.signatureBA,
+      bankAcNo: String(row.bankAcNo || ""),
+      ifscCode: row.ifscCode,
+      bankName: row.bankName,
+      totalFinal: calc.totalBE,
+      otHoursTarget: calc.otHoursAC,
+    }));
 
-    const body = computed.map(({ row, calc }) => [
-      row.srNo,
-      row.empNo,
-      String(row.uanNo || ""),
-      String(row.esicNo || ""),
-      row.employeeName,
-      row.department,
-      row.designation,
-      row.doj,
-      calc.payDaysAB,
-      calc.basicAK,
-      calc.hraAL,
-      calc.totalAN,
-      calc.otAmountAO,
-      calc.grandTotalAP,
-      calc.pfAQ,
-      calc.esicAR,
-      calc.profTaxAS,
-      calc.totalDeductionAY,
-      calc.netPayableAZ,
-      calc.signatureBA,
-      String(row.bankAcNo || ""),
-      row.ifscCode,
-      row.bankName,
-      calc.totalBE,
-    ]);
+    const res = await fetch("/api/client/payroll/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        month: payrollMonth,
+        year: payrollYear,
+        rows: payloadRows,
+      }),
+    });
+    const data = await res.json();
 
-    const sheetData = [headers, ...body];
-    const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-    // Force these columns as text to preserve leading zeros in Excel.
-    // C: UAN Number, D: ESIC Number, S: A/C NO.
-    const textCols = ["C", "D", "S"];
-    for (let r = 2; r <= sheetData.length; r++) {
-      for (const col of textCols) {
-        const addr = `${col}${r}`;
-        const cell = ws[addr];
-        if (!cell) continue;
-        cell.t = "s";
-        cell.v = String(cell.v ?? "");
-      }
+    if (!res.ok) {
+      setStatus(data?.message || "Failed to generate payroll.");
+      return;
     }
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Payroll Final");
-    XLSX.writeFile(wb, `payroll_final_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    setStatus("Final payroll Excel exported.");
+    setStatus("Payroll generated and saved. Open Salary > Payroll Data to export.");
+  }
+
+  async function exportPayrollData() {
+    const res = await fetch("/api/client/payroll/data", { cache: "no-store" });
+    if (!res.ok) {
+      setStatus("Failed to export payroll data.");
+      return;
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const fileNameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+    const fileName = fileNameMatch?.[1] || `payroll_data_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("Payroll data exported.");
+  }
+
+  async function importPayrollData() {
+    if (!importFile) {
+      setStatus("Please choose a file first.");
+      return;
+    }
+
+    setStatus("Importing payroll data...");
+    const formData = new FormData();
+    formData.append("file", importFile);
+
+    const res = await fetch("/api/client/payroll/data", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data?.message || "Failed to import payroll data.");
+      return;
+    }
+
+    const payload = data?.data ?? data;
+    const importedRows: PayrollRow[] = payload?.rows || [];
+    if (importedRows.length > 0) {
+      setRows(
+        importedRows.map((row, index) => ({
+          ...row,
+          srNo: Number.isFinite(row.srNo) ? row.srNo : index + 1,
+          actualRateOfPay: Number.isFinite(row.actualRateOfPay) ? row.actualRateOfPay : 0,
+          skillCategory:
+            row.skillCategory === 1 || row.skillCategory === 2 || row.skillCategory === 3
+              ? row.skillCategory
+              : 3,
+          actualWorkingDays: Number.isFinite(row.actualWorkingDays) ? row.actualWorkingDays : 0,
+          otherBenefit: Number.isFinite(row.otherBenefit) ? row.otherBenefit : 0,
+          tds: Number.isFinite(row.tds) ? row.tds : 0,
+          loan: Number.isFinite(row.loan) ? row.loan : 0,
+          adv: Number.isFinite(row.adv) ? row.adv : 0,
+          tea: Number.isFinite(row.tea) ? row.tea : 0,
+          lwf: Number.isFinite(row.lwf) ? row.lwf : 0,
+        }))
+      );
+    }
+    setImportFile(null);
+    await applyAdvanceForPeriod(payrollMonth, payrollYear);
+    setStatus("Payroll data imported.");
   }
 
   return (
@@ -381,22 +531,101 @@ export default function ClientPayrollPage() {
       <ClientSidebar />
 
       <main className="flex-1 min-w-0 p-8">
+        {moduleEnabled === false ? (
+          <div className="rounded-2xl bg-white p-6 shadow">
+            <h2 className="text-xl font-bold text-blue-950">Module Disabled</h2>
+            <p className="mt-2 text-slate-600">Module not enabled by consultant.</p>
+          </div>
+        ) : (
+          <>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-blue-950">Payroll Module</h1>
-            <p className="mt-1 text-slate-600">
-              Excel formulas mapped to app grid. Green/Yellow are client inputs.
-            </p>
           </div>
-          <button
-            onClick={exportFinalExcel}
-            className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
-          >
-            Export Final Payroll (Excel)
-          </button>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Payroll Month
+              </label>
+              <select
+                value={payrollMonth}
+                onChange={async (e) => {
+                  const nextMonth = Number(e.target.value);
+                  setPayrollMonth(nextMonth);
+                  if (moduleEnabled === true) {
+                    await applyAdvanceForPeriod(nextMonth, payrollYear);
+                  }
+                }}
+                className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
+              >
+                {MONTHS.map((month, index) => (
+                  <option key={month} value={index}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Payroll Year
+              </label>
+              <select
+                value={payrollYear}
+                onChange={async (e) => {
+                  const nextYear = Number(e.target.value);
+                  setPayrollYear(nextYear);
+                  if (moduleEnabled === true) {
+                    await applyAdvanceForPeriod(payrollMonth, nextYear);
+                  }
+                }}
+                className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={generatePayroll}
+              className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
+            >
+              Generate Payroll
+            </button>
+          </div>
         </div>
 
+        <p className="mt-2 text-sm font-semibold text-slate-700">
+          Selected payroll period: {selectedMonthLabel} {payrollYear}
+        </p>
+
         {status && <p className="mt-4 text-sm font-semibold text-slate-700">{status}</p>}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow">
+          <button
+            onClick={exportPayrollData}
+            className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
+          >
+            Employee data
+          </button>
+
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+            className="w-full max-w-md rounded-xl border bg-white px-4 py-2 text-slate-900"
+          />
+
+          <button
+            onClick={importPayrollData}
+            className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
+          >
+            Import Filled Data
+          </button>
+        </div>
 
         {loading ? (
           <p className="mt-8 text-slate-600">Loading payroll grid...</p>
@@ -405,64 +634,64 @@ export default function ClientPayrollPage() {
             <table className="min-w-[4200px] w-full text-sm text-slate-900">
               <thead>
                 <tr className="bg-slate-200 text-left text-slate-700">
-                  <th className="p-3">A Sr#</th>
-                  <th className="p-3">B UAN</th>
-                  <th className="p-3">C ESIC</th>
-                  <th className="p-3">D Emp Code</th>
-                  <th className="p-3">E Status</th>
-                  <th className="p-3">F Name</th>
-                  <th className="p-3">G Dept</th>
-                  <th className="p-3">H Desig.</th>
-                  <th className="p-3">I DOJ</th>
+                  <th className="p-3">Sr#</th>
+                  <th className="p-3">UAN</th>
+                  <th className="p-3">ESIC</th>
+                  <th className="p-3">Emp Code</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Name</th>
+                  <th className="p-3">Dept</th>
+                  <th className="p-3">Desig.</th>
+                  <th className="p-3">DOJ</th>
 
-                  <th className="p-3 bg-green-100">J Actual Rate</th>
-                  <th className="p-3 bg-green-100">K Skill</th>
-                  <th className="p-3 bg-red-100">L Min Wages</th>
-                  <th className="p-3 bg-yellow-100">M Working Days</th>
-                  <th className="p-3 bg-red-100">N Basic 50%</th>
-                  <th className="p-3 bg-red-100">O HRA 40%</th>
-                  <th className="p-3 bg-red-100">P Payable Gross</th>
-                  <th className="p-3 bg-red-100">Q Total Payable</th>
-                  <th className="p-3 bg-red-100">R</th>
-                  <th className="p-3 bg-red-100">S OT</th>
-                  <th className="p-3 bg-red-100">T Rate Pay</th>
-                  <th className="p-3 bg-red-100">U BASIC</th>
-                  <th className="p-3 bg-red-100">V HRA</th>
-                  <th className="p-3 bg-red-100">W Attendance</th>
-                  <th className="p-3 bg-red-100">X Rate Wages</th>
-                  <th className="p-3 bg-red-100">Y Actual Payable</th>
-                  <th className="p-3 bg-red-100">Z Adjusted Days</th>
-                  <th className="p-3 bg-red-100">AA TRUNC</th>
-                  <th className="p-3">AB Pay Days</th>
-                  <th className="p-3 bg-red-100">AC OT Hours</th>
-                  <th className="p-3 bg-red-100">AD Min Wage</th>
-                  <th className="p-3 bg-red-100">AE Min Wage</th>
-                  <th className="p-3 bg-red-100">AF ESIC</th>
-                  <th className="p-3 bg-red-100">AG Basic Rate</th>
-                  <th className="p-3 bg-red-100">AH HRA Rate</th>
-                  <th className="p-3 bg-red-100">AI PF App</th>
-                  <th className="p-3 bg-red-100">AJ ESIC App</th>
-                  <th className="p-3">AK Basic</th>
-                  <th className="p-3">AL HRA</th>
-                  <th className="p-3 bg-yellow-100">AM Other Benefit</th>
-                  <th className="p-3">AN TOTAL</th>
-                  <th className="p-3">AO OT Amount</th>
-                  <th className="p-3">AP GRAND TOTAL</th>
-                  <th className="p-3">AQ PF</th>
-                  <th className="p-3">AR ESIC</th>
-                  <th className="p-3">AS Prof Tax</th>
-                  <th className="p-3 bg-yellow-100">AT TDS</th>
-                  <th className="p-3 bg-yellow-100">AU Loan</th>
-                  <th className="p-3 bg-yellow-100">AV Adv</th>
-                  <th className="p-3 bg-yellow-100">AW Tea</th>
-                  <th className="p-3 bg-yellow-100">AX LWF</th>
-                  <th className="p-3">AY Total Deduction</th>
-                  <th className="p-3">AZ Net Payable</th>
-                  <th className="p-3">BA Signature</th>
-                  <th className="p-3">BB A/C</th>
-                  <th className="p-3">BC IFSC</th>
-                  <th className="p-3">BD Bank</th>
-                  <th className="p-3">BE TOTAL</th>
+                  <th className="p-3 bg-green-100">Actual Rate</th>
+                  <th className="p-3 bg-green-100">Skill</th>
+                  <th className="p-3 hidden">L Min Wages</th>
+                  <th className="p-3 bg-yellow-100">Working Days</th>
+                  <th className="p-3 hidden">N Basic 50%</th>
+                  <th className="p-3 hidden">O HRA 40%</th>
+                  <th className="p-3 hidden">P Payable Gross</th>
+                  <th className="p-3 hidden">Q Total Payable</th>
+                  <th className="p-3 hidden">R</th>
+                  <th className="p-3 hidden">S OT</th>
+                  <th className="p-3 hidden">T Rate Pay</th>
+                  <th className="p-3 hidden">U BASIC</th>
+                  <th className="p-3 hidden">V HRA</th>
+                  <th className="p-3 hidden">W Attendance</th>
+                  <th className="p-3 hidden">X Rate Wages</th>
+                  <th className="p-3 hidden">Y Actual Payable</th>
+                  <th className="p-3 hidden">Z Adjusted Days</th>
+                  <th className="p-3 hidden">AA TRUNC</th>
+                  <th className="p-3">Pay Days</th>
+                  <th className="p-3 hidden">AC OT Hours</th>
+                  <th className="p-3 hidden">AD Min Wage</th>
+                  <th className="p-3 hidden">AE Min Wage</th>
+                  <th className="p-3 hidden">AF ESIC</th>
+                  <th className="p-3 hidden">AG Basic Rate</th>
+                  <th className="p-3 hidden">AH HRA Rate</th>
+                  <th className="p-3 hidden">AI PF App</th>
+                  <th className="p-3 hidden">AJ ESIC App</th>
+                  <th className="p-3">Basic</th>
+                  <th className="p-3">HRA</th>
+                  <th className="p-3 bg-yellow-100">Other Benefit</th>
+                  <th className="p-3">TOTAL</th>
+                  <th className="p-3">OT Amount</th>
+                  <th className="p-3">GRAND TOTAL</th>
+                  <th className="p-3">PF</th>
+                  <th className="p-3">ESIC</th>
+                  <th className="p-3">Prof Tax</th>
+                  <th className="p-3 bg-yellow-100">TDS</th>
+                  <th className="p-3 bg-yellow-100">Loan</th>
+                  <th className="p-3 bg-yellow-100">Adv</th>
+                  <th className="p-3 bg-yellow-100">Tea</th>
+                  <th className="p-3 bg-yellow-100">LWF</th>
+                  <th className="p-3">Total Deduction</th>
+                  <th className="p-3">Net Payable</th>
+                  <th className="p-3">Signature</th>
+                  <th className="p-3">A/C</th>
+                  <th className="p-3">IFSC</th>
+                  <th className="p-3">Bank</th>
+                  <th className="p-3">TOTAL</th>
                 </tr>
               </thead>
 
@@ -506,7 +735,7 @@ export default function ClientPayrollPage() {
                         <option value={3}>3</option>
                       </select>
                     </td>
-                    <td className="p-3 bg-red-50">{money(calc.minimumWagesL)}</td>
+                    <td className="p-3 hidden">{money(calc.minimumWagesL)}</td>
                     <td className="p-2 bg-yellow-50">
                       <input
                         type="number"
@@ -518,29 +747,29 @@ export default function ClientPayrollPage() {
                         }
                       />
                     </td>
-                    <td className="p-3 bg-red-50">{money(calc.basic50N)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.hra40O)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.actualPayableGrossP)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.totalPayableAmountQ)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.divisorR)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.otS)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.rateOfPayT)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.basicU)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.hraV)}</td>
-                    <td className="p-3 bg-red-50">{calc.actualAttendanceW.toFixed(2)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.rateOfWagesX)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.actualPayableY)}</td>
-                    <td className="p-3 bg-red-50">{calc.adjustedDaysZ.toFixed(2)}</td>
-                    <td className="p-3 bg-red-50">{calc.truncAA}</td>
+                    <td className="p-3 hidden">{money(calc.basic50N)}</td>
+                    <td className="p-3 hidden">{money(calc.hra40O)}</td>
+                    <td className="p-3 hidden">{money(calc.actualPayableGrossP)}</td>
+                    <td className="p-3 hidden">{money(calc.totalPayableAmountQ)}</td>
+                    <td className="p-3 hidden">{money(calc.divisorR)}</td>
+                    <td className="p-3 hidden">{money(calc.otS)}</td>
+                    <td className="p-3 hidden">{money(calc.rateOfPayT)}</td>
+                    <td className="p-3 hidden">{money(calc.basicU)}</td>
+                    <td className="p-3 hidden">{money(calc.hraV)}</td>
+                    <td className="p-3 hidden">{calc.actualAttendanceW.toFixed(2)}</td>
+                    <td className="p-3 hidden">{money(calc.rateOfWagesX)}</td>
+                    <td className="p-3 hidden">{money(calc.actualPayableY)}</td>
+                    <td className="p-3 hidden">{calc.adjustedDaysZ.toFixed(2)}</td>
+                    <td className="p-3 hidden">{calc.truncAA}</td>
                     <td className="p-3">{calc.payDaysAB}</td>
-                    <td className="p-3 bg-red-50">{calc.otHoursAC}</td>
-                    <td className="p-3 bg-red-50">{money(calc.minWageAD)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.minWageAE)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.esicAF)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.basicRateAG)}</td>
-                    <td className="p-3 bg-red-50">{money(calc.hraRateAH)}</td>
-                    <td className="p-3 bg-red-50">{calc.pfApplicabilityAI}</td>
-                    <td className="p-3 bg-red-50">{calc.esicApplicabilityAJ}</td>
+                    <td className="p-3 hidden">{calc.otHoursAC}</td>
+                    <td className="p-3 hidden">{money(calc.minWageAD)}</td>
+                    <td className="p-3 hidden">{money(calc.minWageAE)}</td>
+                    <td className="p-3 hidden">{money(calc.esicAF)}</td>
+                    <td className="p-3 hidden">{money(calc.basicRateAG)}</td>
+                    <td className="p-3 hidden">{money(calc.hraRateAH)}</td>
+                    <td className="p-3 hidden">{calc.pfApplicabilityAI}</td>
+                    <td className="p-3 hidden">{calc.esicApplicabilityAJ}</td>
                     <td className="p-3">{money(calc.basicAK)}</td>
                     <td className="p-3">{money(calc.hraAL)}</td>
 
@@ -611,9 +840,65 @@ export default function ClientPayrollPage() {
                     <td className="p-3">{money(calc.totalBE)}</td>
                   </tr>
                 ))}
+                {computed.length > 0 && (
+                  <tr className="border-t-2 bg-slate-100 font-bold text-slate-900">
+                    <td className="p-3" colSpan={9}>
+                      Grand Total
+                    </td>
+                    <td className="p-3 bg-green-50">{money(payrollTotals.actualRateOfPay)}</td>
+                    <td className="p-3 bg-green-50">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 bg-yellow-50">{payrollTotals.actualWorkingDays.toFixed(2)}</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3">{payrollTotals.payDays.toFixed(2)}</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3 hidden">-</td>
+                    <td className="p-3">{money(payrollTotals.basic)}</td>
+                    <td className="p-3">{money(payrollTotals.hra)}</td>
+                    <td className="p-3 bg-yellow-50">-</td>
+                    <td className="p-3">{money(payrollTotals.total)}</td>
+                    <td className="p-3">{money(payrollTotals.otAmount)}</td>
+                    <td className="p-3">{money(payrollTotals.grandTotal)}</td>
+                    <td className="p-3">{money(payrollTotals.pf)}</td>
+                    <td className="p-3">{money(payrollTotals.esic)}</td>
+                    <td className="p-3">{money(payrollTotals.profTax)}</td>
+                    <td className="p-3 bg-yellow-50">{money(payrollTotals.tds)}</td>
+                    <td className="p-3 bg-yellow-50">{money(payrollTotals.loan)}</td>
+                    <td className="p-3 bg-yellow-50">{money(payrollTotals.adv)}</td>
+                    <td className="p-3 bg-yellow-50">{money(payrollTotals.tea)}</td>
+                    <td className="p-3 bg-yellow-50">{money(payrollTotals.lwf)}</td>
+                    <td className="p-3">{money(payrollTotals.totalDeduction)}</td>
+                    <td className="p-3 text-blue-950">{money(payrollTotals.netPayable)}</td>
+                    <td className="p-3">-</td>
+                    <td className="p-3">-</td>
+                    <td className="p-3">-</td>
+                    <td className="p-3">-</td>
+                    <td className="p-3">{money(payrollTotals.totalFinal)}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

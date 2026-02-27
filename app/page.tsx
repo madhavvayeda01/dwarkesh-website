@@ -34,8 +34,6 @@ export default function HomePage() {
             >
               Book Consultation
             </a>
-            <a className="hover:text-yellow-300" href="/admin">Admin</a>
-
           </div>
         </div>
       </section>

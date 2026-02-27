@@ -1,42 +1,38 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import path from "path";
-import fs from "fs/promises";
+import { z } from "zod";
+import { fail, ok } from "@/lib/api-response";
+import { requireAdmin } from "@/lib/auth-guards";
+import { ensureStorageConfigured, uploadToSupabase } from "@/lib/storage";
+import { logger } from "@/lib/logger";
+
+const imageSchema = z.object({
+  type: z.string().startsWith("image/"),
+  size: z.number().max(5 * 1024 * 1024),
+});
 
 export async function POST(req: Request) {
-  try {
-    // 🔐 Admin auth check
-    const cookieStore = await cookies();
-    const adminSession = cookieStore.get("admin_session")?.value;
-    if (!adminSession) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+  const { error } = await requireAdmin();
+  if (error) return error;
 
+  const storageError = ensureStorageConfigured();
+  if (storageError) return storageError;
+
+  try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    if (!file) return fail("No file uploaded", 400);
 
-    if (!file) {
-      return NextResponse.json({ message: "No file uploaded" }, { status: 400 });
+    const valid = imageSchema.safeParse({ type: file.type, size: file.size });
+    if (!valid.success) {
+      return fail("Invalid image file", 400, valid.error.flatten());
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const uploaded = await uploadToSupabase(file, "client-logos");
+    if (!uploaded.ok) return fail(uploaded.error, 500);
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "client-logos");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const fileName = `${Date.now()}-${file.name.replace(/\s/g, "_")}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    await fs.writeFile(filePath, buffer);
-
-    const logoUrl = `/uploads/client-logos/${fileName}`;
-
-    return NextResponse.json({ ok: true, logoUrl });
+    logger.info("admin.client_logo.upload.success", { fileName: file.name });
+    return ok("Logo uploaded", { logoUrl: uploaded.fileUrl });
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Upload failed" },
-      { status: 500 }
-    );
+    logger.error("admin.client_logo.upload.error", { message: err?.message });
+    return fail(err?.message || "Upload failed", 500);
   }
 }

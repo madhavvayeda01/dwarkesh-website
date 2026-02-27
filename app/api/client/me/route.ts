@@ -1,34 +1,21 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
+import { fail, ok } from "@/lib/api-response";
+import { getSessionFromCookies } from "@/lib/auth";
 
 export async function GET() {
-  const cookieStore = await cookies();
-
-  const token = cookieStore.get("client_token")?.value;
-  const clientId = cookieStore.get("client_id")?.value;
-
-  // must be logged in AND must have client id
-  if (token !== "logged_in" || !clientId) {
-    return NextResponse.json({ loggedIn: false });
+  const session = await getSessionFromCookies();
+  if (!session || session.role !== "client" || !session.clientId) {
+    return fail("Not authenticated", 401, { loggedIn: false });
   }
 
   const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      createdAt: true,
-    },
+    where: { id: session.clientId },
+    select: { id: true, name: true, email: true, createdAt: true },
   });
 
   if (!client) {
-    return NextResponse.json({ loggedIn: false });
+    return fail("Client account not found", 401, { loggedIn: false });
   }
 
-  return NextResponse.json({
-    loggedIn: true,
-    client,
-  });
+  return ok("Authenticated", { loggedIn: true, client });
 }

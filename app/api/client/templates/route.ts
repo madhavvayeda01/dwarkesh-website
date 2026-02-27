@@ -1,29 +1,19 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { fail, ok } from "@/lib/api-response";
+import { requireClientModule } from "@/lib/auth-guards";
 
 export async function GET() {
+  const { error, session } = await requireClientModule("documents");
+  if (error || !session) return error;
+
   try {
-    const cookieStore = await cookies();
-
-    // ✅ Your client login must be setting this cookie
-    const clientId = cookieStore.get("client_id")?.value;
-
-    if (!clientId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
     const templates = await prisma.documentTemplate.findMany({
-      where: { clientId },
+      where: { clientId: session.clientId },
       select: { id: true, title: true },
       orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json({ ok: true, templates });
+    return ok("Templates loaded", { templates });
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to load templates" },
-      { status: 500 }
-    );
+    return fail(err?.message || "Failed to load templates", 500);
   }
 }

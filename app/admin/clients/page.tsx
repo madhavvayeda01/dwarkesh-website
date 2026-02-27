@@ -8,7 +8,8 @@ export default function AdminClientsPage() {
     async function checkLogin() {
       const res = await fetch("/api/admin/me");
       const data = await res.json();
-      if (!data.loggedIn) window.location.href = "/signin";
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
+      if (!loggedIn) window.location.href = "/signin";
     }
     checkLogin();
   }, []);
@@ -33,21 +34,22 @@ export default function AdminClientsPage() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch("/api/admin/upload/client-logo", {
+    const res = await fetch("/api/admin/client-logo", {
       method: "POST",
       body: formData,
     });
 
     const data = await res.json();
+    const payload = data?.data ?? data;
 
     if (!res.ok) {
-      setStatus(`❌ ${data.message || "Logo upload failed"}`);
+      setStatus(`${data.message || "Logo upload failed"}`);
       setUploading(false);
       return;
     }
 
-    setLogoUrl(data.logoUrl);
-    setStatus("✅ Logo uploaded successfully!");
+    setLogoUrl(payload.logoUrl);
+    setStatus("Logo uploaded successfully!");
     setUploading(false);
   }
 
@@ -73,12 +75,12 @@ export default function AdminClientsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setStatus(`❌ ${data.message || "Failed to create client"}`);
+        setStatus(`${data.message || "Failed to create client"}`);
         setLoading(false);
         return;
       }
 
-      setStatus("✅ Client created successfully!");
+      setStatus("Client created successfully!");
       setName("");
       setEmail("");
       setPassword("");
@@ -86,7 +88,7 @@ export default function AdminClientsPage() {
       setContactNumber("");
       setLogoUrl("");
     } catch (err) {
-      setStatus("❌ Server error, try again.");
+      setStatus("Server error, try again.");
     }
 
     setLoading(false);
@@ -232,3 +234,5 @@ export default function AdminClientsPage() {
     </div>
   );
 }
+
+

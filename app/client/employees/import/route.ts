@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { normalizeEmployeeCodeOrNull } from "@/lib/employee-code";
+import { normalizeImportedDate } from "@/lib/excel-date";
 
 function clean(v: any) {
   if (v === undefined || v === null) return null;
@@ -10,6 +12,29 @@ function clean(v: any) {
   if (s === "") return null;
   if (/^#+$/.test(s)) return null;
   return s;
+}
+
+function normalizeUanNo(v: unknown) {
+  if (v === undefined || v === null) return null;
+
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const digits = Math.trunc(v).toString().replace(/\D/g, "");
+    return digits || null;
+  }
+
+  const s = String(v).trim();
+  if (s === "" || /^#+$/.test(s)) return null;
+
+  const compact = s.replace(/[\s,]/g, "");
+  const numeric = Number(compact);
+  if (Number.isFinite(numeric)) {
+    const plain = numeric.toLocaleString("fullwide", { useGrouping: false });
+    const digits = plain.replace(/\D/g, "");
+    return digits || null;
+  }
+
+  const digits = compact.replace(/\D/g, "");
+  return digits || null;
 }
 
 export async function POST(req: Request) {
@@ -85,10 +110,10 @@ export async function POST(req: Request) {
     const mapped = rows.map((r) => ({
       clientId,
 
-      empNo: clean(r["Emp NO."]),
+      empNo: normalizeEmployeeCodeOrNull(clean(r["Emp NO."])),
       fileNo: clean(r["File No."]),
       pfNo: clean(r["PF No."]),
-      uanNo: clean(r["UAN No."]),
+      uanNo: normalizeUanNo(r["UAN No."]),
       esicNo: clean(r["ESIC No."]),
 
       firstName: clean(r["First Name"]),
@@ -100,9 +125,9 @@ export async function POST(req: Request) {
       currentDept: clean(r["Current Dept."]),
       salaryWage: clean(r["Salary/Wage"]),
 
-      dob: clean(r["DOB"]),
-      doj: clean(r["DOJ"]),
-      dor: clean(r["DOR"]),
+      dob: normalizeImportedDate(r["DOB"]),
+      doj: normalizeImportedDate(r["DOJ"]),
+      dor: normalizeImportedDate(r["DOR"]),
       reasonForExit: clean(r["Reason For Exit"]),
 
       panNo: clean(r["PAN No."]),
@@ -148,14 +173,39 @@ export async function POST(req: Request) {
     }));
 
     // ✅ insert into DB
-    const result = await prisma.employee.createMany({
-      data: mapped,
-      skipDuplicates: true,
+    const withEmpNo = mapped.filter((row) => row.empNo);
+    const withoutEmpNo = mapped.filter((row) => !row.empNo);
+
+    const latestByEmpNo = new Map<string, (typeof mapped)[number]>();
+    for (const row of withEmpNo) {
+      latestByEmpNo.set(row.empNo as string, row);
+    }
+    const dedupedWithEmpNo = Array.from(latestByEmpNo.values());
+    const employeeCodes = Array.from(latestByEmpNo.keys());
+
+    const result = await prisma.$transaction(async (tx) => {
+      let replaced = 0;
+      if (employeeCodes.length > 0) {
+        const deleted = await tx.employee.deleteMany({
+          where: {
+            clientId,
+            empNo: { in: employeeCodes },
+          },
+        });
+        replaced = deleted.count;
+      }
+
+      const inserted = await tx.employee.createMany({
+        data: [...dedupedWithEmpNo, ...withoutEmpNo],
+      });
+
+      return { inserted: inserted.count, replaced };
     });
 
     return NextResponse.json({
       ok: true,
-      inserted: result.count,
+      inserted: result.inserted,
+      replaced: result.replaced,
     });
   } catch (err: any) {
     console.log("IMPORT ERROR:", err);

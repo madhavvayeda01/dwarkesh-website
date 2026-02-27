@@ -1,0 +1,5 @@
+ALTER TABLE "ClientShiftConfig"
+ADD COLUMN "generalShiftEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "shiftAEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "shiftBEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "shiftCEnabled" BOOLEAN NOT NULL DEFAULT true;

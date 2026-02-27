@@ -5,7 +5,6 @@ import { useState } from "react";
 export default function SignInPage() {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -22,33 +21,32 @@ export default function SignInPage() {
       });
 
       const data = await res.json();
+      const payload = data?.data ?? data;
 
       if (!res.ok) {
-        setStatus(`❌ ${data.message || "Invalid username/email or password"}`);
+        setStatus(data.message || "Invalid username/email or password.");
         setLoading(false);
         return;
       }
 
-      // ✅ Redirect from backend
-      if (data.redirectTo) {
-        window.location.href = data.redirectTo;
+      if (payload.redirectTo) {
+        window.location.href = payload.redirectTo;
         return;
       }
 
-      // fallback
-      if (data.role === "admin") {
+      if (payload.role === "admin") {
         window.location.href = "/admin";
         return;
       }
 
-      if (data.role === "client") {
+      if (payload.role === "client") {
         window.location.href = "/client-dashboard";
         return;
       }
 
-      setStatus("❌ Unknown role returned from server.");
-    } catch (err) {
-      setStatus("❌ Server error, try again.");
+      setStatus("Login succeeded but role mapping failed. Please contact admin.");
+    } catch {
+      setStatus("Server error. Please try again.");
     }
 
     setLoading(false);
@@ -62,7 +60,7 @@ export default function SignInPage() {
         </h1>
 
         <p className="mt-2 text-center text-slate-600">
-          Admin + Client login from same page
+          One login for admin and client users.
         </p>
 
         <form onSubmit={handleLogin} className="mt-8 grid gap-5">
@@ -71,8 +69,8 @@ export default function SignInPage() {
               Username / Email
             </label>
             <input
-              className="mt-1 w-full rounded-xl border px-4 py-3 text-slate-900"
-              placeholder="Enter admin username OR client email"
+              className="mt-1 w-full rounded-xl border bg-white px-4 py-3 text-slate-900"
+              placeholder="Enter admin username or client email"
               value={usernameOrEmail}
               onChange={(e) => setUsernameOrEmail(e.target.value)}
               required
@@ -85,7 +83,7 @@ export default function SignInPage() {
             </label>
             <input
               type="password"
-              className="mt-1 w-full rounded-xl border px-4 py-3 text-slate-900"
+              className="mt-1 w-full rounded-xl border bg-white px-4 py-3 text-slate-900"
               placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -102,13 +100,11 @@ export default function SignInPage() {
           </button>
 
           {status && (
-            <p className="text-center text-sm font-semibold text-slate-700">
-              {status}
-            </p>
+            <p className="text-center text-sm font-semibold text-slate-700">{status}</p>
           )}
 
           <p className="text-center text-xs text-slate-500">
-            Tip: Admin username/password is in <b>.env</b>
+            Admin credentials are configured in environment variables.
           </p>
         </form>
       </div>

@@ -1,51 +1,56 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import bcrypt from "bcrypt";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { fail, ok } from "@/lib/api-response";
+import { requireAdmin } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
+
+const createClientSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+  logoUrl: z.string().trim().url().optional().or(z.literal("")),
+  address: z.string().trim().optional().or(z.literal("")),
+  contactNumber: z.string().trim().optional().or(z.literal("")),
+});
 
 export async function POST(req: Request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
   try {
-    // 🔐 Admin auth check
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get("admin_token")?.value;
-
-    if (adminToken !== "logged_in") {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const parsed = createClientSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return fail("Invalid client payload", 400, parsed.error.flatten());
     }
 
-    const body = await req.json();
-    const { name, email, password, logoUrl, address, contactNumber } = body;
-
-    if (!name || !email || !password) {
-      return NextResponse.json(
-        { message: "Name, email, password are required" },
-        { status: 400 }
-      );
-    }
+    const { name, email, password, logoUrl, address, contactNumber } = parsed.data;
 
     const existing = await prisma.client.findUnique({ where: { email } });
     if (existing) {
-      return NextResponse.json(
-        { message: "Client already exists with this email" },
-        { status: 400 }
-      );
+      return fail("Client already exists with this email", 400);
     }
+
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const client = await prisma.client.create({
       data: {
         name,
         email,
-        password,
+        password: passwordHash,
         logoUrl: logoUrl || null,
         address: address || null,
         contactNumber: contactNumber || null,
+        moduleControl: {
+          create: {},
+        },
       },
     });
 
-    return NextResponse.json({ ok: true, client });
+    logger.info("admin.client.create.success", { clientId: client.id, email: client.email });
+    return ok("Client created", { client }, 201);
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to create client" },
-      { status: 500 }
-    );
+    logger.error("admin.client.create.error", { message: err?.message });
+    return fail(err?.message || "Failed to create client", 500);
   }
 }

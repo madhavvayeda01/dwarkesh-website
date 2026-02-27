@@ -1,14 +1,19 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-
+import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
-
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import mammoth from "mammoth";
 import puppeteer from "puppeteer";
+import { prisma } from "@/lib/prisma";
+import { fail } from "@/lib/api-response";
+import { requireClientModule } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
+
+const generateSchema = z.object({
+  templateId: z.string().trim().min(1),
+  empCode: z.string().trim().min(1),
+});
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "";
@@ -17,7 +22,6 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function sanitizeDocxXml(xml: string): string {
-  // Word can inject proofing markers inside {{placeholder}} tokens and break parsing.
   return xml.replace(/<w:proofErr[^>]*\/>/g, "");
 }
 
@@ -30,87 +34,56 @@ function extractDocxErrorDetails(error: any): string {
   );
 }
 
+async function readTemplateBytes(fileUrl: string) {
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`Template fetch failed (${res.status})`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+  const templatePath = path.join(process.cwd(), "public", fileUrl);
+  if (!fs.existsSync(templatePath)) {
+    throw new Error("Template file missing on server");
+  }
+  return fs.readFileSync(templatePath);
+}
+
 export async function POST(req: Request) {
+  const { error, session } = await requireClientModule("documents");
+  if (error || !session) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("client_token")?.value;
-    const clientId = cookieStore.get("client_id")?.value;
-
-    if (token !== "logged_in" || !clientId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const parsed = generateSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return fail("Invalid payload", 400, parsed.error.flatten());
     }
+    const { templateId, empCode } = parsed.data;
 
-    const body = (await req.json()) as {
-      templateId?: string;
-      empCode?: string;
-    };
-    const templateId = body.templateId?.trim();
-    const empCode = body.empCode?.trim();
-
-    if (!templateId || !empCode) {
-      return NextResponse.json(
-        { message: "templateId and empCode required" },
-        { status: 400 }
-      );
-    }
+    logger.info("pdf.generate.start", { clientId: session.clientId, templateId, empCode });
 
     const template = await prisma.documentTemplate.findFirst({
-      where: { id: templateId, clientId },
-      include: {
-        client: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      where: { id: templateId, clientId: session.clientId },
+      include: { client: { select: { name: true } } },
     });
-
-    if (!template) {
-      return NextResponse.json({ message: "Template not found" }, { status: 404 });
-    }
+    if (!template) return fail("Template not found", 404);
 
     const employee = await prisma.employee.findFirst({
-      where: { clientId, empNo: empCode },
+      where: { clientId: session.clientId, empNo: empCode },
     });
+    if (!employee) return fail("Employee not found for this Emp Code", 404);
 
-    if (!employee) {
-      return NextResponse.json(
-        { message: "Employee not found for this Emp Code" },
-        { status: 404 }
-      );
-    }
-
-    const templatePath = path.join(process.cwd(), "public", template.fileUrl);
-    if (!fs.existsSync(templatePath)) {
-      return NextResponse.json(
-        { message: "Template file missing on server" },
-        { status: 500 }
-      );
-    }
-
-    const content = fs.readFileSync(templatePath, "binary");
+    const content = await readTemplateBytes(template.fileUrl);
     const zip = new PizZip(content);
 
     const documentXml = zip.file("word/document.xml")?.asText();
-    if (documentXml) {
-      zip.file("word/document.xml", sanitizeDocxXml(documentXml));
-    }
-
+    if (documentXml) zip.file("word/document.xml", sanitizeDocxXml(documentXml));
     Object.keys(zip.files)
-      .filter(
-        (name) =>
-          name.startsWith("word/header") && name.endsWith(".xml")
-      )
+      .filter((name) => name.startsWith("word/header") && name.endsWith(".xml"))
       .forEach((name) => {
         const xml = zip.file(name)?.asText();
         if (xml) zip.file(name, sanitizeDocxXml(xml));
       });
-
     Object.keys(zip.files)
-      .filter(
-        (name) =>
-          name.startsWith("word/footer") && name.endsWith(".xml")
-      )
+      .filter((name) => name.startsWith("word/footer") && name.endsWith(".xml"))
       .forEach((name) => {
         const xml = zip.file(name)?.asText();
         if (xml) zip.file(name, sanitizeDocxXml(xml));
@@ -120,13 +93,9 @@ export async function POST(req: Request) {
       paragraphLoop: true,
       linebreaks: true,
       nullGetter: () => "",
-      delimiters: {
-        start: "{{",
-        end: "}}",
-      },
+      delimiters: { start: "{{", end: "}}" },
     });
 
-    // Primary placeholders use schema field names.
     const data = {
       empNo: employee.empNo || "",
       fileNo: employee.fileNo || "",
@@ -179,88 +148,21 @@ export async function POST(req: Request) {
       nominee2BirthDate: formatDate(employee.nominee2BirthDate),
       nominee2Age: employee.nominee2Age || "",
       nominee2Proportion: employee.nominee2Proportion || "",
-
-      // Admin-uploaded template placeholders.
       client_name: template.client.name || "",
       employee_full_name: employee.fullName || "",
       employee_emp_no: employee.empNo || "",
       employee_designation: employee.designation || "",
       employee_department: employee.currentDept || "",
-
-      // Backward-compatible aliases for older templates.
-      "Emp No": employee.empNo || "",
-      "File No": employee.fileNo || "",
-      "PF No": employee.pfNo || "",
-      "UAN No": employee.uanNo || "",
-      "ESIC No": employee.esicNo || "",
-      "First Name": employee.firstName || "",
-      "Sur Name": employee.surName || "",
-      "Father/Spouse Name": employee.fatherSpouseName || "",
-      "Full Name": employee.fullName || "",
-      "Current Dept": employee.currentDept || "",
-      "Salary/Wage": employee.salaryWage || "",
-      DOB: formatDate(employee.dob),
-      DOJ: formatDate(employee.doj),
-      DOR: formatDate(employee.dor),
-      "Reason For Exit": employee.reasonForExit || "",
-      "PAN No": employee.panNo || "",
-      "Aadhar No": employee.aadharNo || "",
-      "ELC ID No": employee.elcIdNo || "",
-      "Driving Licence No": employee.drivingLicenceNo || "",
-      "Bank A/c No": employee.bankAcNo || "",
-      "IFSC Code": employee.ifscCode || "",
-      "Bank Name": employee.bankName || "",
-      "Mobile Number": employee.mobileNumber || "",
-      Gender: employee.gender || "",
-      Religion: employee.religion || "",
-      Nationality: employee.nationality || "",
-      "Type of Employment": employee.typeOfEmployment || "",
-      "Marital Status": employee.maritalStatus || "",
-      "Education Qualification": employee.educationQualification || "",
-      "Experience In Relevant Field": employee.experienceInRelevantField || "",
-      "Present Add": employee.presentAddress || "",
-      "Present Add.": employee.presentAddress || "",
-      "Permanent Add": employee.permanentAddress || "",
-      "Permanent Add.": employee.permanentAddress || "",
-      "Temporary Add": employee.temporaryAddress || "",
-      "Temporary Add.": employee.temporaryAddress || "",
-      Village: employee.village || "",
-      Thana: employee.thana || "",
-      "Sub-Division": employee.subDivision || "",
-      "Sub- Division": employee.subDivision || "",
-      "Post Office": employee.postOffice || "",
-      District: employee.district || "",
-      State: employee.state || "",
-      "Pin Code": employee.pinCode || "",
-      "Name Of Nominee1": employee.nominee1Name || "",
-      "Relation Nominee1": employee.nominee1Relation || "",
-      "Birth date Nominee-1": formatDate(employee.nominee1BirthDate),
-      "Age Nominee 1": employee.nominee1Age || "",
-      "Proportion Will be shared-1": employee.nominee1Proportion || "",
-      "Proportion Will be shared- 1": employee.nominee1Proportion || "",
-      "Name Of Nominee-2": employee.nominee2Name || "",
-      "Relation Nominee2": employee.nominee2Relation || "",
-      "Relation Nominee-2": employee.nominee2Relation || "",
-      "Birth date Nominee-2": formatDate(employee.nominee2BirthDate),
-      "Age Nominee 2": employee.nominee2Age || "",
-      "Proportion Will be shared-2": employee.nominee2Proportion || "",
     };
 
     doc.setData(data);
-
     try {
       doc.render();
-    } catch (error: any) {
-      const details = extractDocxErrorDetails(error);
-
-      return NextResponse.json(
-        {
-          message: details
-            ? `Template placeholder rendering failed: ${details}`
-            : "Template placeholder rendering failed",
-          error: error?.message || String(error),
-        },
-        { status: 400 }
+    } catch (renderErr: any) {
+      const details = extractDocxErrorDetails(renderErr);
+      return fail(
+        details ? `Template placeholder rendering failed: ${details}` : "Template placeholder rendering failed",
+        400
       );
     }
 
@@ -271,49 +173,36 @@ export async function POST(req: Request) {
 
     const htmlResult = await mammoth.convertToHtml({ buffer: updatedDocxBuffer });
     const html = `
-      <html>
-        <head>
-          <meta charset="UTF-8" />
-          <style>
-            body { font-family: Arial, sans-serif; font-size: 12pt; }
-          </style>
-        </head>
-        <body>
-          ${htmlResult.value}
-        </body>
-      </html>
+      <html><head><meta charset="UTF-8" /><style>body { font-family: Arial, sans-serif; font-size: 12pt; }</style></head>
+      <body>${htmlResult.value}</body></html>
     `;
 
     const browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
-
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
-
-    const pdfUint8 = await page.pdf({
-      format: "A4",
-      printBackground: true,
-    });
-
+    const pdfUint8 = await page.pdf({ format: "A4", printBackground: true });
     await browser.close();
 
-    return new Response(Buffer.from(pdfUint8), {
+    logger.info("pdf.generate.success", { clientId: session.clientId, templateId, empCode });
+    const binary = Uint8Array.from(pdfUint8);
+    return new Response(binary, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${employee.empNo}_${template.title}.pdf"`,
       },
     });
   } catch (err: any) {
+    logger.error("pdf.generate.error", {
+      clientId: session.clientId,
+      message: err?.message,
+    });
     const details = extractDocxErrorDetails(err);
-    return NextResponse.json(
-      {
-        message: details
-          ? `Failed to generate PDF: ${details}`
-          : err?.message || "Failed to generate PDF",
-      },
-      { status: 500 }
+    return fail(
+      details ? `Failed to generate PDF: ${details}` : err?.message || "Failed to generate PDF",
+      500
     );
   }
 }

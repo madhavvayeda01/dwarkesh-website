@@ -1,10 +1,7 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { ok } from "@/lib/api-response";
+import { clearSessionCookie } from "@/lib/auth";
 
 export async function POST() {
-  const cookieStore = await cookies();
-
-  cookieStore.delete("admin_token");
-
-  return NextResponse.json({ ok: true });
+  await clearSessionCookie();
+  return ok("Logged out", null);
 }

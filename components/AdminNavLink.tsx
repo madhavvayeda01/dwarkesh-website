@@ -10,9 +10,10 @@ export default function AdminNavLink() {
       try {
         const res = await fetch("/api/admin/me", { cache: "no-store" });
         const data = await res.json();
+        const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
 
-        setShow(!!data.loggedIn);
-      } catch (e) {
+        setShow(!!loggedIn);
+      } catch {
         setShow(false);
       }
     }
@@ -23,7 +24,10 @@ export default function AdminNavLink() {
   if (!show) return null;
 
   return (
-    <a className="hover:text-yellow-300" href="/admin">
+    <a
+      className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+      href="/admin"
+    >
       Admin
     </a>
   );

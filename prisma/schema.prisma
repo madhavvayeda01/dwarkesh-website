@@ -31,6 +31,10 @@ model Client {
 
   employees     Employee[]
   templates     DocumentTemplate[]
+  moduleControl ModuleControl?
+  shiftConfig   ClientShiftConfig?
+  holidays      ClientHoliday[]
+  payrollRecords PayrollRecord[]
 }
 
 model Employee {
@@ -103,8 +107,31 @@ model Employee {
   nominee2Proportion String?
 
   createdAt DateTime @default(now())
+  attendances Attendance[]
+  payrollRecords PayrollRecord[]
 
   @@index([clientId])
+}
+
+model Attendance {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date         DateTime
+  status       String   @default("A")
+  generationSeed String?
+  inTime       String?
+  outTime      String?
+  breakMinutes Int
+  workHours    Float
+  otHours      Float
+  month        Int
+  year         Int
+  createdAt    DateTime @default(now())
+
+  @@unique([employeeId, date])
+  @@index([month, year])
+  @@index([employeeId, month, year])
 }
 
 model DocumentGroup {
@@ -130,4 +157,121 @@ model DocumentTemplate {
 
   @@index([clientId])
   @@index([groupId])
+}
+
+model AuditParameterOption {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditDocumentOption {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditFloorOption {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProgramAudit {
+  id                String   @id @default(cuid())
+  name              String
+  parameterOptionIds String[]
+  documentOptionIds  String[]
+  floorOptionIds     String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([name])
+}
+
+model ModuleControl {
+  id                    String   @id @default(cuid())
+  clientId              String   @unique
+  client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employeesEnabled      Boolean  @default(true)
+  payrollEnabled        Boolean  @default(true)
+  inOutEnabled          Boolean  @default(true)
+  trainingEnabled       Boolean  @default(true)
+  committeesEnabled     Boolean  @default(true)
+  documentsEnabled      Boolean  @default(true)
+  auditEnabled          Boolean  @default(true)
+  chatEnabled           Boolean  @default(true)
+  notificationsEnabled  Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+enum WeekendType {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+  ROTATIONAL
+}
+
+model ClientShiftConfig {
+  id                String      @id @default(cuid())
+  clientId          String      @unique
+  client            Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  generalShiftEnabled Boolean   @default(true)
+  generalShiftStart DateTime    @db.Time(0)
+  generalShiftEnd   DateTime    @db.Time(0)
+  shiftAEnabled     Boolean     @default(true)
+  shiftAStart       DateTime    @db.Time(0)
+  shiftAEnd         DateTime    @db.Time(0)
+  shiftBEnabled     Boolean     @default(true)
+  shiftBStart       DateTime    @db.Time(0)
+  shiftBEnd         DateTime    @db.Time(0)
+  shiftCEnabled     Boolean     @default(true)
+  shiftCStart       DateTime    @db.Time(0)
+  shiftCEnd         DateTime    @db.Time(0)
+  weekendType       WeekendType
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model ClientHoliday {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date      DateTime
+  name      String
+  year      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, date])
+  @@index([year])
+  @@index([clientId, year])
+}
+
+model PayrollRecord {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employeeId    String?
+  employee      Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  month         Int
+  year          Int
+  employeeCode  String
+  employeeName  String?
+  payDays       Float
+  otHoursTarget Float   @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([clientId, year, month, employeeCode])
+  @@index([clientId, year, month])
+  @@index([clientId, year, month, employeeId])
 }

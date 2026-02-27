@@ -1,33 +1,22 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
+import { fail, ok } from "@/lib/api-response";
+import { requireAdmin } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
 
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token")?.value;
-
-    if (token !== "logged_in") {
-      return NextResponse.json(
-        { ok: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const { id } = await params;
-
-    await prisma.employee.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ ok: true });
+    await prisma.employee.delete({ where: { id } });
+    logger.info("admin.employee.delete.success", { employeeId: id });
+    return ok("Employee deleted", null);
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to delete employee" },
-      { status: 500 }
-    );
+    logger.error("admin.employee.delete.error", { message: err?.message });
+    return fail(err?.message || "Failed to delete employee", 500);
   }
 }

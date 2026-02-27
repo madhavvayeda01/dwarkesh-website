@@ -1,45 +1,73 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
+import { fail, ok } from "@/lib/api-response";
+import { requireClientModule } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
+import { buildEmployeeUpdateData } from "@/lib/employee-data";
 
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, session } = await requireClientModule("employees");
+  if (error || !session) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("client_token")?.value;
-    const clientId = cookieStore.get("client_id")?.value;
-
-    if (token !== "logged_in" || !clientId) {
-      return NextResponse.json(
-        { ok: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const { id } = await params;
-
-    const emp = await prisma.employee.findUnique({
-      where: { id },
-    });
-
-    if (!emp || emp.clientId !== clientId) {
-      return NextResponse.json(
-        { ok: false, message: "Not allowed" },
-        { status: 403 }
-      );
+    const employee = await prisma.employee.findUnique({ where: { id } });
+    if (!employee || employee.clientId !== session.clientId) {
+      return fail("Not allowed", 403);
     }
 
-    await prisma.employee.delete({
+    await prisma.employee.delete({ where: { id } });
+    logger.info("employee.delete.success", {
+      clientId: session.clientId,
+      employeeId: id,
+    });
+    return ok("Employee deleted", null);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete employee";
+    logger.error("employee.delete.error", {
+      clientId: session.clientId,
+      message,
+    });
+    return fail(message, 500);
+  }
+}
+
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { error, session } = await requireClientModule("employees");
+  if (error || !session) return error;
+
+  try {
+    const { id } = await params;
+    const employee = await prisma.employee.findUnique({ where: { id } });
+    if (!employee || employee.clientId !== session.clientId) {
+      return fail("Not allowed", 403);
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
+    const data = buildEmployeeUpdateData(body);
+
+    const updated = await prisma.employee.update({
       where: { id },
+      data,
     });
 
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to delete employee" },
-      { status: 500 }
-    );
+    logger.info("employee.update.success", {
+      clientId: session.clientId,
+      employeeId: id,
+    });
+
+    return ok("Employee updated", { employee: updated });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to update employee";
+    logger.error("employee.update.error", {
+      clientId: session.clientId,
+      message,
+    });
+    return fail(message, 500);
   }
 }

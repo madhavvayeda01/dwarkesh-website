@@ -13,18 +13,31 @@ type Client = {
 export default function ClientDashboardPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const modules = [
+    { name: "Employee Data", href: "/client/employees" },
+    { name: "Payroll", href: "/client/payroll" },
+    { name: "Payroll Data", href: "/client/payroll-data" },
+    { name: "IN-OUT", href: "/client/in-out" },
+    { name: "PF Challan", href: "/client/pf-challan" },
+    { name: "ESIC Challan", href: "/client/esic-challan" },
+    { name: "Audit Dashboard", href: "/client/audit" },
+    { name: "Training", href: "/client/training" },
+    { name: "Committees", href: "/client/committees" },
+    { name: "Client Connect", href: "/client/chat" },
+  ];
 
   useEffect(() => {
     async function checkClient() {
       const res = await fetch("/api/client/me");
       const data = await res.json();
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
 
-      if (!data.loggedIn) {
+      if (!loggedIn) {
         window.location.href = "/signin";
         return;
       }
 
-      setClient(data.client);
+      setClient(data?.data?.client ?? data?.client);
       setLoading(false);
     }
 
@@ -38,9 +51,20 @@ export default function ClientDashboardPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-100 flex items-center justify-center">
-        <p className="text-slate-700 font-semibold">Loading dashboard...</p>
-      </main>
+      <div className="flex min-h-screen bg-slate-100">
+        <ClientSidebar />
+        <main className="flex-1 p-8">
+          <div className="mx-auto max-w-6xl animate-pulse space-y-4 rounded-3xl bg-white p-6 shadow-md">
+            <div className="h-10 w-72 rounded bg-slate-200" />
+            <div className="h-5 w-96 rounded bg-slate-200" />
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="h-20 rounded-2xl bg-slate-200" />
+              <div className="h-20 rounded-2xl bg-slate-200" />
+              <div className="h-20 rounded-2xl bg-slate-200" />
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 
@@ -59,7 +83,7 @@ export default function ClientDashboardPage() {
               </h1>
 
               <p className="mt-2 text-slate-600">
-                Logged in as client:{" "}
+                Company Name:{" "}
                 <span className="font-semibold text-blue-900">
                   {client?.name}
                 </span>{" "}
@@ -75,38 +99,26 @@ export default function ClientDashboardPage() {
             </button>
           </div>
 
-          {/* Cards */}
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            <div className="rounded-3xl bg-white p-6 shadow-md">
-              <h2 className="text-lg font-bold text-blue-950">Documents</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Upload and manage compliance documents.
-              </p>
-              <p className="mt-4 text-xs font-semibold text-slate-500">
-                Coming soon
-              </p>
-            </div>
+          <div className="mt-8 rounded-3xl bg-white p-6 shadow-md">
+            <h2 className="text-xl font-bold text-blue-950">Activated Modules</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              The following modules are active for{" "}
+              <span className="font-semibold text-blue-900">{client?.name}</span>.
+            </p>
 
-            <div className="rounded-3xl bg-white p-6 shadow-md">
-              <h2 className="text-lg font-bold text-blue-950">Payroll</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Payroll & payslip support module.
-              </p>
-              <p className="mt-4 text-xs font-semibold text-slate-500">
-                Coming soon
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-white p-6 shadow-md">
-              <h2 className="text-lg font-bold text-blue-950">Audit Module</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Audit checklist + findings tracking.
-              </p>
-              <p className="mt-4 text-xs font-semibold text-slate-500">
-                Coming soon
-              </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {modules.map((module) => (
+                <a
+                  key={module.name}
+                  href={module.href}
+                  className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-950 hover:bg-blue-200"
+                >
+                  {module.name}
+                </a>
+              ))}
             </div>
           </div>
+
         </section>
       </main>
     </div>

@@ -13,7 +13,7 @@ export default function PrimaryNavLinks() {
     return (
       <Link
         href="/client-dashboard"
-        className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/20"
+        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
       >
         Home
       </Link>
@@ -26,35 +26,35 @@ export default function PrimaryNavLinks() {
     <>
       <Link
         href="/vision-mission"
-        className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/20"
+        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
       >
         Vision & Mission
       </Link>
 
       <Link
         href="/services"
-        className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/20"
+        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
       >
         Products & Services
       </Link>
 
       <Link
         href="/business-partners"
-        className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/20"
+        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
       >
         Business Partners
       </Link>
 
       <Link
         href="/enquire-now"
-        className="rounded-xl bg-yellow-500 px-4 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
+        className="rounded-lg bg-amber-400 px-4 py-2 font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
       >
         Enquire Now
       </Link>
 
       <Link
         href="/book-consultation"
-        className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/20"
+        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
       >
         Book Consultation
       </Link>

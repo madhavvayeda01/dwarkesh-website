@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { fail, ok } from "@/lib/api-response";
+import { getSessionFromCookies } from "@/lib/auth";
 
 export async function GET() {
-  const token = (await cookies()).get("admin_token")?.value;
+  const session = await getSessionFromCookies();
+  if (!session || session.role !== "admin") {
+    return fail("Not authenticated", 401, { loggedIn: false });
+  }
 
-  return NextResponse.json({
-    loggedIn: token === "logged_in",
-    admin: token ? "admin" : null,
+  return ok("Authenticated", {
+    loggedIn: true,
+    admin: "admin",
   });
 }

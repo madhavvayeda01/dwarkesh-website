@@ -1,7 +1,28 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { buildEmployeeCreateData } from "@/lib/employee-data";
+import { fail, ok } from "@/lib/api-response";
+import { requireClientModule } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
+import { normalizeStoredDateMaybe } from "@/lib/excel-date";
+
+const createEmployeeSchema = z.object({
+  fullName: z.string().trim().min(1),
+  empNo: z.string().trim().optional(),
+  fileNo: z.string().trim().optional(),
+  pfNo: z.string().trim().optional(),
+  uanNo: z.string().trim().optional(),
+  esicNo: z.string().trim().optional(),
+  firstName: z.string().trim().optional(),
+  surName: z.string().trim().optional(),
+  fatherSpouseName: z.string().trim().optional(),
+  designation: z.string().trim().optional(),
+  currentDept: z.string().trim().optional(),
+  salaryWage: z.string().trim().optional(),
+  doj: z.string().trim().optional(),
+  mobileNumber: z.string().trim().optional(),
+  presentAddress: z.string().trim().optional(),
+}).passthrough();
 
 function sanitizeHashOnlyStrings<T extends Record<string, unknown>>(row: T): T {
   const entries = Object.entries(row).map(([key, value]) => {
@@ -10,70 +31,121 @@ function sanitizeHashOnlyStrings<T extends Record<string, unknown>>(row: T): T {
     if (/^#+$/.test(trimmed)) return [key, null];
     return [key, value];
   });
-
   return Object.fromEntries(entries) as T;
 }
 
 export async function GET() {
+  const { error, session } = await requireClientModule("employees");
+  if (error || !session) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("client_token")?.value;
-    const clientId = cookieStore.get("client_id")?.value;
-
-    if (token !== "logged_in" || !clientId) {
-      return NextResponse.json(
-        { ok: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const employees = await prisma.employee.findMany({
-      where: { clientId },
+      where: { clientId: session.clientId },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({
-      ok: true,
-      employees: employees.map(sanitizeHashOnlyStrings),
+    const updates = employees
+      .map((employee) => {
+        const nextDob = normalizeStoredDateMaybe(employee.dob);
+        const nextDoj = normalizeStoredDateMaybe(employee.doj);
+        const nextDor = normalizeStoredDateMaybe(employee.dor);
+        const changed =
+          nextDob !== employee.dob || nextDoj !== employee.doj || nextDor !== employee.dor;
+        if (!changed) return null;
+        return { id: employee.id, dob: nextDob, doj: nextDoj, dor: nextDor };
+      })
+      .filter((item): item is { id: string; dob: string | null; doj: string | null; dor: string | null } => item !== null);
+
+    if (updates.length > 0) {
+      await prisma.$transaction(
+        updates.map((item) =>
+          prisma.employee.update({
+            where: { id: item.id },
+            data: { dob: item.dob, doj: item.doj, dor: item.dor },
+          })
+        )
+      );
+
+      for (const employee of employees) {
+        const match = updates.find((u) => u.id === employee.id);
+        if (!match) continue;
+        employee.dob = match.dob;
+        employee.doj = match.doj;
+        employee.dor = match.dor;
+      }
+    }
+
+    logger.info("employee.list.success", {
+      clientId: session.clientId,
+      count: employees.length,
+      repairedDateRows: updates.length,
     });
-  } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to fetch employees" },
-      { status: 500 }
+
+    return ok(
+      "Employees fetched",
+      { employees: employees.map(sanitizeHashOnlyStrings) }
     );
+  } catch (err: any) {
+    logger.error("employee.list.error", {
+      clientId: session.clientId,
+      message: err?.message,
+    });
+    return fail(err?.message || "Failed to fetch employees", 500);
   }
 }
 
 export async function POST(req: Request) {
+  const { error, session } = await requireClientModule("employees");
+  if (error || !session) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("client_token")?.value;
-    const clientId = cookieStore.get("client_id")?.value;
+    const clientId = session.clientId;
+    if (!clientId) return fail("Unauthorized", 401);
 
-    if (token !== "logged_in" || !clientId) {
-      return NextResponse.json(
-        { ok: false, message: "Unauthorized" },
-        { status: 401 }
-      );
+    const parsed = createEmployeeSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return fail("Invalid employee payload", 400, parsed.error.flatten());
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
-    const data = buildEmployeeCreateData(body, clientId);
-
-    if (!data.fullName) {
-      return NextResponse.json(
-        { ok: false, message: "fullName is required" },
-        { status: 400 }
-      );
-    }
+    const data = buildEmployeeCreateData(parsed.data, clientId);
+    if (!data.fullName) return fail("fullName is required", 400);
 
     const employee = await prisma.employee.create({ data });
-
-    return NextResponse.json({ ok: true, employee });
+    logger.info("employee.create.success", {
+      clientId: session.clientId,
+      employeeId: employee.id,
+    });
+    return ok("Employee created", { employee }, 201);
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to create employee" },
-      { status: 500 }
-    );
+    logger.error("employee.create.error", {
+      clientId: session.clientId,
+      message: err?.message,
+    });
+    return fail(err?.message || "Failed to create employee", 500);
+  }
+}
+
+export async function DELETE() {
+  const { error, session } = await requireClientModule("employees");
+  if (error || !session) return error;
+
+  try {
+    const result = await prisma.employee.deleteMany({
+      where: { clientId: session.clientId },
+    });
+
+    logger.info("employee.delete_all.success", {
+      clientId: session.clientId,
+      deleted: result.count,
+    });
+
+    return ok("All employees deleted", { deleted: result.count });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete all employees";
+    logger.error("employee.delete_all.error", {
+      clientId: session.clientId,
+      message,
+    });
+    return fail(message, 500);
   }
 }

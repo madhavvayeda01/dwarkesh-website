@@ -1,100 +1,77 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import path from "path";
-import fs from "fs/promises";
+import { fail, ok } from "@/lib/api-response";
+import { requireAdmin } from "@/lib/auth-guards";
+import { ensureStorageConfigured, uploadToSupabase } from "@/lib/storage";
+import { logger } from "@/lib/logger";
+
+const uploadSchema = z.object({
+  clientId: z.string().trim().min(1),
+  groupName: z.string().trim().min(1).default("Personal File"),
+  title: z.string().trim().min(1),
+});
 
 export async function GET() {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
   try {
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get("admin_token")?.value;
-
-if (adminToken !== "logged_in") {
-  return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-}
-
     const templates = await prisma.documentTemplate.findMany({
       include: { group: true, client: true },
       orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json({ ok: true, templates });
+    return ok("Templates fetched", { templates });
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to fetch templates" },
-      { status: 500 }
-    );
+    return fail(err?.message || "Failed to fetch templates", 500);
   }
 }
 
 export async function POST(req: Request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
+  const storageError = ensureStorageConfigured();
+  if (storageError) return storageError;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token")?.value;
-
-if (token !== "logged_in") {
-  return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-}
-
-
     const formData = await req.formData();
+    const payload = uploadSchema.safeParse({
+      clientId: String(formData.get("clientId") || ""),
+      groupName: String(formData.get("groupName") || "Personal File"),
+      title: String(formData.get("title") || ""),
+    });
+    if (!payload.success) {
+      return fail("Invalid template payload", 400, payload.error.flatten());
+    }
 
-    const clientId = String(formData.get("clientId") || "");
-    const groupName = String(formData.get("groupName") || "Personal File");
-    const title = String(formData.get("title") || "");
     const file = formData.get("file") as File | null;
-
-    if (!clientId || !title || !file) {
-      return NextResponse.json(
-        { ok: false, message: "clientId, title, file are required" },
-        { status: 400 }
-      );
-    }
-
+    if (!file) return fail("file is required", 400);
     if (!file.name.toLowerCase().endsWith(".docx")) {
-      return NextResponse.json(
-        { ok: false, message: "Only .docx files allowed" },
-        { status: 400 }
-      );
+      return fail("Only .docx files allowed", 400);
     }
 
-    // Ensure group exists
+    const uploaded = await uploadToSupabase(file, "templates");
+    if (!uploaded.ok) return fail(uploaded.error, 500);
+
     const group = await prisma.documentGroup.upsert({
-      where: { name: groupName },
+      where: { name: payload.data.groupName },
       update: {},
-      create: { name: groupName },
+      create: { name: payload.data.groupName },
     });
 
-    // Save file to public/uploads/templates
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, "").replace(/\s+/g, "_");
-    const fileName = `${Date.now()}_${safeTitle}.docx`;
-
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "templates");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    await fs.writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/templates/${fileName}`;
-
-    // Save DB record
     const template = await prisma.documentTemplate.create({
       data: {
-        clientId,
+        clientId: payload.data.clientId,
         groupId: group.id,
-        title,
-        fileUrl,
+        title: payload.data.title,
+        fileUrl: uploaded.fileUrl,
       },
     });
 
-    return NextResponse.json({ ok: true, template });
+    logger.info("admin.template.upload.success", { templateId: template.id });
+    return ok("Template uploaded", { template }, 201);
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to upload template" },
-      { status: 500 }
-    );
+    logger.error("admin.template.upload.error", { message: err?.message });
+    return fail(err?.message || "Failed to upload template", 500);
   }
 }

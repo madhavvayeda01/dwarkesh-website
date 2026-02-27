@@ -32,12 +32,13 @@ const PERSONAL_FILE_DOCS = [
 ];
 
 export default function AdminDocumentAllotmentPage() {
-  // 🔐 Admin login check
+  // Admin login check
   useEffect(() => {
     async function checkLogin() {
       const res = await fetch("/api/admin/me");
       const data = await res.json();
-      if (!data.loggedIn) window.location.href = "/signin";
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
+      if (!loggedIn) window.location.href = "/signin";
     }
     checkLogin();
   }, []);
@@ -55,14 +56,16 @@ export default function AdminDocumentAllotmentPage() {
   async function fetchClients() {
     const res = await fetch("/api/admin/clients-list");
     const data = await res.json();
-    setClients(data.clients || []);
+    const payload = data?.data ?? data;
+    setClients(payload.clients || []);
   }
 
   async function fetchTemplates() {
     setLoading(true);
     const res = await fetch("/api/admin/document-templates");
     const data = await res.json();
-    setTemplates(data.templates || []);
+    const payload = data?.data ?? data;
+    setTemplates(payload.templates || []);
     setLoading(false);
   }
 
@@ -74,9 +77,9 @@ export default function AdminDocumentAllotmentPage() {
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!clientId) return setStatus("❌ Please select client");
-    if (!title) return setStatus("❌ Please select document title");
-    if (!file) return setStatus("❌ Please select a DOCX file");
+    if (!clientId) return setStatus("Please select client");
+    if (!title) return setStatus("Please select document title");
+    if (!file) return setStatus("Please select a DOCX file");
 
     setStatus("Uploading template...");
 
@@ -94,12 +97,50 @@ export default function AdminDocumentAllotmentPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      setStatus(`❌ ${data.message || "Upload failed"}`);
+      setStatus(`${data.message || "Upload failed"}`);
       return;
     }
 
-    setStatus("✅ Template uploaded successfully!");
+    setStatus("Template uploaded successfully!");
     setFile(null);
+    fetchTemplates();
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    const confirmed = confirm("Delete this template?");
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/admin/document-templates/${id}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setStatus(`${data.message || "Failed to delete template"}`);
+      return;
+    }
+
+    setStatus("Template deleted successfully!");
+    fetchTemplates();
+  }
+
+  async function handleEditTemplateTitle(id: string, currentTitle: string) {
+    const nextTitle = prompt("Enter new template title:", currentTitle)?.trim();
+    if (!nextTitle || nextTitle === currentTitle) return;
+
+    const res = await fetch(`/api/admin/document-templates/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: nextTitle }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setStatus(`${data.message || "Failed to update template"}`);
+      return;
+    }
+
+    setStatus("Template title updated successfully!");
     fetchTemplates();
   }
 
@@ -242,6 +283,7 @@ export default function AdminDocumentAllotmentPage() {
                       <th className="p-3">Title</th>
                       <th className="p-3">File</th>
                       <th className="p-3">Uploaded</th>
+                      <th className="p-3">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -263,6 +305,24 @@ export default function AdminDocumentAllotmentPage() {
                         <td className="p-3 text-slate-600">
                           {new Date(t.createdAt).toLocaleString()}
                         </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() =>
+                                handleEditTemplateTitle(t.id, t.title)
+                              }
+                              className="rounded-xl bg-yellow-500 px-3 py-2 text-xs font-semibold text-blue-950 hover:bg-yellow-400"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTemplate(t.id)}
+                              className="rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -275,3 +335,5 @@ export default function AdminDocumentAllotmentPage() {
     </div>
   );
 }
+
+

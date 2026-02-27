@@ -19,8 +19,9 @@ export default function AdminPage() {
     async function checkLogin() {
       const res = await fetch("/api/admin/me");
       const data = await res.json();
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
 
-      if (!data.loggedIn) {
+      if (!loggedIn) {
         window.location.href = "/signin";
       }
     }
@@ -50,10 +51,11 @@ export default function AdminPage() {
       `/api/admin/leads?page=${currentPage}&pageSize=${pageSize}`
     );
     const data = await res.json();
+    const payload = data?.data ?? data;
 
-    setLeads(data.leads || []);
-    setTotal(data.total || 0);
-    setTotalPages(data.totalPages || 1);
+    setLeads(payload.leads || []);
+    setTotal(payload.total || 0);
+    setTotalPages(payload.totalPages || 1);
 
     setLoading(false);
   }

@@ -1,73 +1,51 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { buildEmployeeCreateData } from "@/lib/employee-data";
+import { fail, ok } from "@/lib/api-response";
+import { requireAdmin } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
+
+const createEmployeeSchema = z.object({
+  clientId: z.string().trim().min(1),
+  fullName: z.string().trim().min(1),
+}).passthrough();
 
 export async function GET(req: Request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token")?.value;
-
-    if (token !== "logged_in") {
-      return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId")?.trim() || undefined;
-
+    const clientId = new URL(req.url).searchParams.get("clientId")?.trim() || undefined;
     const employees = await prisma.employee.findMany({
       where: clientId ? { clientId } : undefined,
       orderBy: { createdAt: "desc" },
     });
-
-    return NextResponse.json({ ok: true, employees });
+    logger.info("admin.employee.list.success", { clientId, count: employees.length });
+    return ok("Employees fetched", { employees });
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to fetch employees" },
-      { status: 500 }
-    );
+    logger.error("admin.employee.list.error", { message: err?.message });
+    return fail(err?.message || "Failed to fetch employees", 500);
   }
 }
 
 export async function POST(req: Request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token")?.value;
-
-    if (token !== "logged_in") {
-      return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    const parsed = createEmployeeSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return fail("Invalid employee payload", 400, parsed.error.flatten());
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
-    const clientIdRaw = body.clientId ?? body.client_id;
-    const clientId =
-      typeof clientIdRaw === "string" && clientIdRaw.trim() ? clientIdRaw.trim() : "";
+    const data = buildEmployeeCreateData(parsed.data, parsed.data.clientId);
+    if (!data.fullName) return fail("fullName is required", 400);
 
-    if (!clientId) {
-      return NextResponse.json(
-        { ok: false, message: "clientId is required" },
-        { status: 400 }
-      );
-    }
-
-    const data = buildEmployeeCreateData(body, clientId);
-
-    if (!data.fullName) {
-      return NextResponse.json(
-        { ok: false, message: "fullName is required" },
-        { status: 400 }
-      );
-    }
-
-    const employee = await prisma.employee.create({
-      data,
-    });
-
-    return NextResponse.json({ ok: true, employee });
+    const employee = await prisma.employee.create({ data });
+    logger.info("admin.employee.create.success", { employeeId: employee.id, clientId: employee.clientId });
+    return ok("Employee created", { employee }, 201);
   } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, message: err?.message || "Failed to create employee" },
-      { status: 500 }
-    );
+    logger.error("admin.employee.create.error", { message: err?.message });
+    return fail(err?.message || "Failed to create employee", 500);
   }
 }
