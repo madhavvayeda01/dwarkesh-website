@@ -80,7 +80,7 @@ export default function ClientDocumentsPage() {
     if (!empCode.trim()) return setStatus("Please enter employee code.");
 
     setGenerating(true);
-    setStatus("Preparing print document...");
+    setStatus("Generating PDF...");
 
     try {
       const res = await fetch("/api/client/documents/generate-pdf", {
@@ -98,58 +98,16 @@ export default function ClientDocumentsPage() {
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const printWindow = window.open("", "_blank", "noopener,noreferrer");
 
-      if (!printWindow) {
-        window.URL.revokeObjectURL(url);
-        setStatus("Pop-up blocked. Allow pop-ups and try again.");
-        setGenerating(false);
-        return;
-      }
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${empCode.trim()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
 
-      printWindow.document.write(`
-        <!doctype html>
-        <html>
-          <head>
-            <title>Print Document</title>
-            <style>
-              html, body {
-                margin: 0;
-                padding: 0;
-                height: 100%;
-                background: #111827;
-              }
-              iframe {
-                border: 0;
-                width: 100%;
-                height: 100vh;
-              }
-            </style>
-          </head>
-          <body>
-            <iframe id="pdf-frame" src="${url}"></iframe>
-            <script>
-              const frame = document.getElementById("pdf-frame");
-              frame.addEventListener("load", function () {
-                setTimeout(function () {
-                  window.focus();
-                  window.print();
-                }, 500);
-              });
-              window.addEventListener("afterprint", function () {
-                window.close();
-              });
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 60000);
-
-      setStatus("Print dialog opened.");
+      setStatus("PDF downloaded successfully.");
     } catch {
       setStatus("Server error while generating PDF.");
     }
@@ -216,7 +174,7 @@ export default function ClientDocumentsPage() {
             disabled={generating || templates.length === 0}
             className="mt-5 w-full rounded-2xl bg-yellow-500 px-6 py-3 font-semibold text-blue-950 hover:bg-yellow-400 disabled:opacity-50"
           >
-            {generating ? "Preparing..." : "Generate & Print"}
+            {generating ? "Generating..." : "Generate PDF"}
           </button>
 
           {status && (

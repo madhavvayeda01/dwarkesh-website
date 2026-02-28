@@ -231,7 +231,7 @@ export async function POST(req: Request) {
       return new Response(binary, {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename="${employee.empNo}_${template.title}.pdf"`,
+          "Content-Disposition": `attachment; filename="${employee.empNo}_${template.title}.pdf"`,
         },
       });
     } finally {
