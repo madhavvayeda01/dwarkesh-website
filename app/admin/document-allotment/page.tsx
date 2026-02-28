@@ -32,6 +32,8 @@ const PERSONAL_FILE_DOCS = [
   "F&F",
 ];
 
+const CUSTOM_TITLE_VALUE = "__custom__";
+
 export default function AdminDocumentAllotmentPage() {
   // Admin login check
   useEffect(() => {
@@ -49,7 +51,8 @@ export default function AdminDocumentAllotmentPage() {
   const [loading, setLoading] = useState(true);
 
   const [clientId, setClientId] = useState("");
-  const [title, setTitle] = useState(PERSONAL_FILE_DOCS[0]);
+  const [selectedTitle, setSelectedTitle] = useState(PERSONAL_FILE_DOCS[0]);
+  const [customTitle, setCustomTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   const [status, setStatus] = useState("");
@@ -76,6 +79,9 @@ export default function AdminDocumentAllotmentPage() {
     fetchClients();
     fetchTemplates();
   }, []);
+
+  const title =
+    selectedTitle === CUSTOM_TITLE_VALUE ? customTitle.trim() : selectedTitle;
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -106,6 +112,8 @@ export default function AdminDocumentAllotmentPage() {
 
     setStatus("Template uploaded successfully!");
     setFile(null);
+    setSelectedTitle(PERSONAL_FILE_DOCS[0]);
+    setCustomTitle("");
     fetchTemplates();
   }
 
@@ -210,8 +218,8 @@ export default function AdminDocumentAllotmentPage() {
                 </label>
                 <select
                   className="mt-1 w-full rounded-xl border px-4 py-3"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  value={selectedTitle}
+                  onChange={(e) => setSelectedTitle(e.target.value)}
                   required
                 >
                   {PERSONAL_FILE_DOCS.map((d) => (
@@ -219,7 +227,18 @@ export default function AdminDocumentAllotmentPage() {
                       {d}
                     </option>
                   ))}
+                  <option value={CUSTOM_TITLE_VALUE}>Other (Custom Title)</option>
                 </select>
+                {selectedTitle === CUSTOM_TITLE_VALUE && (
+                  <input
+                    type="text"
+                    className="mt-3 w-full rounded-xl border px-4 py-3"
+                    placeholder="Enter custom document title"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    required
+                  />
+                )}
               </div>
 
               <div>
