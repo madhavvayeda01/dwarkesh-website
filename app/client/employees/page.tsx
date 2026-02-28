@@ -432,6 +432,8 @@ export default function ClientEmployeesPage() {
   const [savingRow, setSavingRow] = useState(false);
   const [editDraft, setEditDraft] = useState<Partial<Record<FilterableEmployeeField, string>>>({});
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [empSortOrder, setEmpSortOrder] = useState<"none" | "asc" | "desc">("none");
   const [globalSearch, setGlobalSearch] = useState("");
   const [columnSearch, setColumnSearch] = useState<Partial<Record<FilterableEmployeeField, string>>>({});
@@ -474,7 +476,11 @@ export default function ClientEmployeesPage() {
     const res = await fetch("/api/client/employees", { cache: "no-store" });
     const data = await res.json();
     const payload = data?.data ?? data;
-    setEmployees(normalizeHashOnlyValues(payload.employees || []));
+    const nextEmployees = normalizeHashOnlyValues(payload.employees || []);
+    setEmployees(nextEmployees);
+    setSelectedEmployeeIds((prev) =>
+      prev.filter((id) => nextEmployees.some((employee) => employee.id === id))
+    );
     setLoading(false);
   }
 
@@ -576,6 +582,12 @@ export default function ClientEmployeesPage() {
 
     setMsg(`Employee marked ${nextStatus}`);
     await fetchEmployees();
+  }
+
+  function toggleEmployeeSelection(employeeId: string) {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId]
+    );
   }
 
   function startEditRow(employee: Employee) {
@@ -733,6 +745,72 @@ export default function ClientEmployeesPage() {
     });
     return sorted;
   }, [employees, categoricalFilters, columnSearch, globalSearch, empSortOrder]);
+
+  const filteredEmployeeIds = useMemo(
+    () => filteredEmployees.map((employee) => employee.id),
+    [filteredEmployees]
+  );
+  const selectedEmployeeIdSet = useMemo(
+    () => new Set(selectedEmployeeIds),
+    [selectedEmployeeIds]
+  );
+  const allVisibleSelected =
+    filteredEmployeeIds.length > 0 &&
+    filteredEmployeeIds.every((employeeId) => selectedEmployeeIdSet.has(employeeId));
+
+  function toggleSelectVisibleEmployees() {
+    setSelectedEmployeeIds((prev) => {
+      const current = new Set(prev);
+      if (allVisibleSelected) {
+        filteredEmployeeIds.forEach((employeeId) => current.delete(employeeId));
+      } else {
+        filteredEmployeeIds.forEach((employeeId) => current.add(employeeId));
+      }
+      return Array.from(current);
+    });
+  }
+
+  async function handleBulkAction(action: "delete" | "set_active" | "set_inactive") {
+    if (selectedEmployeeIds.length === 0) {
+      setMsg("Select at least one employee first");
+      return;
+    }
+
+    const actionLabel =
+      action === "delete"
+        ? "delete"
+        : action === "set_active"
+          ? "set active"
+          : "set inactive";
+    const confirmed = confirm(
+      `Apply "${actionLabel}" to ${selectedEmployeeIds.length} selected employees?`
+    );
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch("/api/client/employees/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          employeeIds: selectedEmployeeIds,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data?.message || "Bulk employee action failed");
+        return;
+      }
+
+      const payload = data?.data ?? data;
+      setMsg(`Updated ${payload?.affected ?? selectedEmployeeIds.length} employees`);
+      setSelectedEmployeeIds([]);
+      await fetchEmployees();
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
 
   const gapItems = useMemo(() => {
     const parsedCodes = employees
@@ -1265,6 +1343,40 @@ export default function ClientEmployeesPage() {
             </div>
           </div>
 
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <button
+              onClick={toggleSelectVisibleEmployees}
+              disabled={filteredEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {allVisibleSelected ? "Clear Visible Selection" : "Select Visible Rows"}
+            </button>
+            <button
+              onClick={() => handleBulkAction("set_active")}
+              disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Set Active
+            </button>
+            <button
+              onClick={() => handleBulkAction("set_inactive")}
+              disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Set Inactive
+            </button>
+            <button
+              onClick={() => handleBulkAction("delete")}
+              disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Delete Selected
+            </button>
+            <span className="text-xs font-semibold text-slate-600">
+              Selected: {selectedEmployeeIds.length}
+            </span>
+          </div>
+
           {loading ? (
             <p className="mt-4 text-slate-600">Loading employees...</p>
           ) : employees.length === 0 ? (
@@ -1276,14 +1388,22 @@ export default function ClientEmployeesPage() {
               <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
                 <thead className="bg-slate-200 text-slate-700">
                   <tr>
+                    <th className="sticky left-0 z-30 min-w-[52px] bg-slate-200 p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectVisibleEmployees}
+                        aria-label="Select visible employees"
+                      />
+                    </th>
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={column.key}
                         className={`p-3 ${
                           column.key === "empNo"
-                            ? "left-0 z-30 min-w-[120px] bg-slate-200"
+                            ? "sticky left-[52px] z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
-                              ? "left-[120px] z-30 min-w-[220px] bg-slate-200"
+                              ? "sticky left-[172px] z-30 min-w-[220px] bg-slate-200"
                               : "z-20 bg-slate-200"
                         }`}
                       >
@@ -1295,14 +1415,15 @@ export default function ClientEmployeesPage() {
                     </th>
                   </tr>
                   <tr>
+                    <th className="sticky left-0 z-10 bg-slate-200 p-2" />
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={`${column.key}-search`}
                         className={`p-2 ${
                           column.key === "empNo"
-                            ? "left-0 z-30 min-w-[120px] bg-slate-200"
+                            ? "sticky left-[52px] z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
-                              ? "left-[120px] z-30 min-w-[220px] bg-slate-200"
+                              ? "sticky left-[172px] z-30 min-w-[220px] bg-slate-200"
                               : "z-20 bg-slate-200"
                         }`}
                       >
@@ -1329,14 +1450,22 @@ export default function ClientEmployeesPage() {
                         highlightedRowId === e.id ? "bg-yellow-100" : ""
                       }`}
                     >
+                      <td className="sticky left-0 z-10 min-w-[52px] bg-white p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedEmployeeIdSet.has(e.id)}
+                          onChange={() => toggleEmployeeSelection(e.id)}
+                          aria-label={`Select ${e.fullName || e.empNo || "employee"}`}
+                        />
+                      </td>
                       {EMPLOYEE_COLUMNS.map((column) => (
                         <td
                           key={`${e.id}-${column.key}`}
                           className={`p-3 ${
                             column.key === "empNo"
-                              ? "sticky left-0 z-10 min-w-[120px] bg-white"
+                              ? "sticky left-[52px] z-10 min-w-[120px] bg-white"
                               : column.key === "fullName"
-                                ? "sticky left-[120px] z-10 min-w-[220px] bg-white font-semibold text-blue-950"
+                                ? "sticky left-[172px] z-10 min-w-[220px] bg-white font-semibold text-blue-950"
                                 : ""
                           }`}
                         >
@@ -1435,7 +1564,7 @@ export default function ClientEmployeesPage() {
                   {filteredEmployees.length === 0 && (
                     <tr className="border-t">
                       <td
-                        colSpan={EMPLOYEE_COLUMNS.length + 1}
+                        colSpan={EMPLOYEE_COLUMNS.length + 2}
                         className="p-4 text-center text-slate-600"
                       >
                         No records match current filters.
