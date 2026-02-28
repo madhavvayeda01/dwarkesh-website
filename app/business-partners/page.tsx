@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+type PublicPartner = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  location: string;
+};
+
 function initials(name: string | null | undefined) {
   const parts = String(name || "")
     .trim()
@@ -12,30 +19,35 @@ function initials(name: string | null | undefined) {
   return parts.map((part) => part[0]?.toUpperCase() || "").join("");
 }
 
-function formatDate(value: Date | string | null | undefined) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+function extractPublicLocation(address: string | null | undefined) {
+  const raw = String(address || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (raw.length === 0) return "Location shared after confirmation";
+  if (raw.length === 1) return raw[0];
+
+  return raw[raw.length - 2] || raw[raw.length - 1] || "Location shared after confirmation";
 }
 
 export default async function BusinessPartnersPage() {
-  const partners = await prisma.client.findMany({
+  const partnerRows = await prisma.client.findMany({
     select: {
       id: true,
       name: true,
-      email: true,
       logoUrl: true,
       address: true,
-      contactNumber: true,
-      createdAt: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { name: "asc" },
   });
+
+  const partners: PublicPartner[] = partnerRows.map((partner) => ({
+    id: partner.id,
+    name: partner.name?.trim() || "Registered Partner",
+    logoUrl: partner.logoUrl,
+    location: extractPublicLocation(partner.address),
+  }));
 
   const partnerCount = partners.length;
 
@@ -51,8 +63,8 @@ export default async function BusinessPartnersPage() {
               Business Partners
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-200 md:text-lg">
-              Live partner records from the current client database. Each card reflects a
-              registered company profile, logo, and contact details available in the system.
+              Verified company profiles from the current client database. Public view shows only
+              safe partner identity details.
             </p>
           </div>
 
@@ -67,7 +79,7 @@ export default async function BusinessPartnersPage() {
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur">
               <p className="text-xs uppercase tracking-[0.22em] text-cyan-200">Profile View</p>
-              <p className="mt-3 text-lg font-bold">Logo + Contact</p>
+              <p className="mt-3 text-lg font-bold">Company + Location</p>
             </div>
           </div>
         </div>
@@ -89,7 +101,7 @@ export default async function BusinessPartnersPage() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {partners.map((partner, index) => (
+            {partners.map((partner) => (
               <article
                 key={partner.id}
                 className="group relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(15,23,42,0.14)]"
@@ -115,38 +127,34 @@ export default async function BusinessPartnersPage() {
                         <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-900">
                           Registered Partner
                         </span>
-                        <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-800">
-                          Profile #{index + 1}
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-800">
+                          Verified Partner
                         </span>
                       </div>
 
                       <h2 className="mt-4 line-clamp-2 text-2xl font-black tracking-tight text-slate-950">
                         {partner.name}
                       </h2>
-
-                      <p className="mt-2 text-sm font-semibold text-slate-500">
-                        Added on {formatDate(partner.createdAt)}
-                      </p>
                     </div>
                   </div>
 
                   <div className="mt-6 grid gap-3">
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                        Email
+                        Company Name
                       </p>
-                      <p className="mt-2 break-all text-sm font-semibold text-slate-900">
-                        {partner.email || "-"}
+                      <p className="mt-2 text-base font-bold text-slate-900">
+                        {partner.name}
                       </p>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl bg-slate-50 p-4">
                         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                          Contact
+                          City / State
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">
-                          {partner.contactNumber || "-"}
+                          {partner.location}
                         </p>
                       </div>
 
@@ -155,18 +163,9 @@ export default async function BusinessPartnersPage() {
                           Status
                         </p>
                         <p className="mt-2 text-sm font-semibold text-emerald-700">
-                          Active Record
+                          Verified Partner
                         </p>
                       </div>
-                    </div>
-
-                    <div className="rounded-2xl bg-[linear-gradient(180deg,#f8fafc_0%,#eef4ff_100%)] p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                        Address
-                      </p>
-                      <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm font-semibold text-slate-800">
-                        {partner.address || "Address not added yet."}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -174,6 +173,10 @@ export default async function BusinessPartnersPage() {
             ))}
           </div>
         )}
+
+        <p className="mt-6 text-sm font-semibold text-slate-600">
+          Partner contact details are shared only after confirmation.
+        </p>
       </section>
 
       <section className="mt-10 overflow-hidden rounded-[32px] bg-[linear-gradient(135deg,#0f1d53_0%,#173ca2_58%,#2f6df3_100%)] p-8 text-white shadow-[0_24px_70px_rgba(17,34,84,0.18)]">
