@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     const template = await prisma.documentTemplate.findFirst({
       where: { id: templateId, clientId: session.clientId },
-      include: { client: { select: { name: true } } },
+      include: { client: { select: { name: true, address: true, logoUrl: true } } },
     });
     if (!template) return fail("Template not found", 404);
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       delimiters: { start: "{{", end: "}}" },
     });
 
-    const data = buildPersonalFileTemplateData(employee, template.client.name || "");
+    const data = buildPersonalFileTemplateData(employee, template.client);
 
     doc.setData(data);
     try {

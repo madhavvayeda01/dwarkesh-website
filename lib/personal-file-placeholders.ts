@@ -14,6 +14,8 @@ function formatDate(value: string | null | undefined): string {
 
 export const PERSONAL_FILE_PLACEHOLDERS: PersonalFilePlaceholder[] = [
   { key: "client_name", label: "Client Name", group: "Client" },
+  { key: "client_address", label: "Client Address", group: "Client" },
+  { key: "client_logo", label: "Client Logo URL", group: "Client" },
   { key: "empNo", label: "Employee Number", group: "Employee" },
   { key: "fileNo", label: "File Number", group: "Employee" },
   { key: "pfNo", label: "PF Number", group: "Employee" },
@@ -72,9 +74,20 @@ export const PERSONAL_FILE_PLACEHOLDERS: PersonalFilePlaceholder[] = [
   { key: "employee_department", label: "Employee Department Alias", group: "Employee" },
 ];
 
-export function buildPersonalFileTemplateData(employee: Employee, clientName: string) {
+type PersonalFileClientData = {
+  name: string | null;
+  address: string | null;
+  logoUrl: string | null;
+};
+
+export function buildPersonalFileTemplateData(
+  employee: Employee,
+  client: PersonalFileClientData
+) {
   return {
-    client_name: clientName || "",
+    client_name: client.name || "",
+    client_address: client.address || "",
+    client_logo: client.logoUrl || "",
     empNo: employee.empNo || "",
     fileNo: employee.fileNo || "",
     pfNo: employee.pfNo || "",
