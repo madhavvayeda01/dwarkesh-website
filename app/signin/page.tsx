@@ -77,7 +77,10 @@ export default function SignInPage() {
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-[0.22em] text-cyan-200">Support</p>
               <p className="mt-2 text-sm font-semibold text-white">
-                Need access? Email: dwarkeshconsultancyahmedabad@gmail.com
+                Need access?
+              </p>
+              <p className="mt-1 break-words text-sm font-semibold text-white">
+                dwarkeshconsultancyahmedabad@gmail.com
               </p>
             </div>
           </div>
