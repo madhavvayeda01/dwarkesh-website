@@ -9,16 +9,13 @@ type ModulesResponse = {
   pages?: PageAccessMap;
 };
 
-const PAGE_BY_KEY = Object.fromEntries(
-  CLIENT_PAGE_DEFINITIONS.map((page) => [page.key, page])
-) as Record<ClientPageKey, (typeof CLIENT_PAGE_DEFINITIONS)[number]>;
-
-const SALARY_GROUPS = {
-  payroll: ["payroll", "payroll_data", "payslip", "payslip_data"] as ClientPageKey[],
-  advance: ["advance", "advance_data"] as ClientPageKey[],
-  compliance: ["pf_challan", "esic_challan"] as ClientPageKey[],
-  attendance: ["in_out", "in_out_data"] as ClientPageKey[],
-};
+const SALARY_SUBGROUP_ORDER = ["payroll", "advance", "compliance", "attendance"] as const;
+const SALARY_SUBGROUP_LABELS = {
+  payroll: "Payroll",
+  advance: "Advance",
+  compliance: "Compliance",
+  attendance: "Attendance",
+} as const;
 
 export default function ClientSidebar() {
   const pathname = usePathname();
@@ -90,16 +87,32 @@ export default function ClientSidebar() {
     return new Set(enabledKeys);
   }, [pages]);
 
-  const hasEmployeeGroup = ["employee_master", "add_employee", "personal_documents"].some((key) =>
-    visiblePageLinks.has(key as ClientPageKey)
+  const visiblePages = useMemo(
+    () => CLIENT_PAGE_DEFINITIONS.filter((page) => visiblePageLinks.has(page.key)),
+    [visiblePageLinks]
   );
-  const hasAuditGroup = ["audit_dashboard", "training", "committees"].some((key) =>
-    visiblePageLinks.has(key as ClientPageKey)
+
+  const employeePages = useMemo(
+    () => visiblePages.filter((page) => page.navGroup === "employee_data"),
+    [visiblePages]
   );
-  const hasChat = visiblePageLinks.has("dc_connect");
-  const hasSalaryGroup = Object.values(SALARY_GROUPS).some((group) =>
-    group.some((key) => visiblePageLinks.has(key))
+  const auditPages = useMemo(
+    () => visiblePages.filter((page) => page.navGroup === "audit_module"),
+    [visiblePages]
   );
+  const chatPages = useMemo(
+    () => visiblePages.filter((page) => page.navGroup === "chat"),
+    [visiblePages]
+  );
+  const salarySubgroups = useMemo(() => {
+    return SALARY_SUBGROUP_ORDER.map((subGroup) => ({
+      key: subGroup,
+      label: SALARY_SUBGROUP_LABELS[subGroup],
+      pages: visiblePages.filter(
+        (page) => page.navGroup === "salary" && page.subGroup === subGroup
+      ),
+    })).filter((section) => section.pages.length > 0);
+  }, [visiblePages]);
 
   const linkClass = (path: string) =>
     `block rounded-lg px-3 py-2 text-sm font-semibold transition ${
@@ -127,7 +140,7 @@ export default function ClientSidebar() {
           Dashboard
         </Link>
 
-        {hasEmployeeGroup && (
+        {employeePages.length > 0 && (
           <div className="group">
             <button
               type="button"
@@ -147,18 +160,16 @@ export default function ClientSidebar() {
                   : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {(["employee_master", "add_employee", "personal_documents"] as ClientPageKey[])
-                .filter((key) => visiblePageLinks.has(key))
-                .map((key) => (
-                  <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
-                    {PAGE_BY_KEY[key].label}
-                  </Link>
-                ))}
+              {employeePages.map((page) => (
+                <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+                  {page.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}
 
-        {hasSalaryGroup && (
+        {salarySubgroups.length > 0 && (
           <div className="group">
             <button
               type="button"
@@ -178,12 +189,8 @@ export default function ClientSidebar() {
                   : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {(Object.entries(SALARY_GROUPS) as Array<
-                [keyof typeof SALARY_GROUPS, ClientPageKey[]]
-              >).map(([sectionKey, pageKeys]) => {
-                const visiblePages = pageKeys.filter((key) => visiblePageLinks.has(key));
-                if (visiblePages.length === 0) return null;
-
+              {salarySubgroups.map((section) => {
+                const sectionKey = section.key;
                 const isActive =
                   sectionKey === "payroll"
                     ? inPayrollGroup || visibleSalarySection === "payroll"
@@ -204,20 +211,14 @@ export default function ClientSidebar() {
                         )
                       }
                     >
-                      {sectionKey === "payroll"
-                        ? "Payroll"
-                        : sectionKey === "advance"
-                        ? "Advance"
-                        : sectionKey === "compliance"
-                        ? "Compliance"
-                        : "Attendance"}
+                      {section.label}
                     </button>
 
                     {isActive && (
                       <div className="space-y-2 pl-2">
-                        {visiblePages.map((key) => (
-                          <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
-                            {PAGE_BY_KEY[key].label}
+                        {section.pages.map((page) => (
+                          <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+                            {page.label}
                           </Link>
                         ))}
                       </div>
@@ -229,7 +230,7 @@ export default function ClientSidebar() {
           </div>
         )}
 
-        {hasAuditGroup && (
+        {auditPages.length > 0 && (
           <div className="group">
             <button
               type="button"
@@ -249,22 +250,20 @@ export default function ClientSidebar() {
                   : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {(["audit_dashboard", "training", "committees"] as ClientPageKey[])
-                .filter((key) => visiblePageLinks.has(key))
-                .map((key) => (
-                  <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
-                    {PAGE_BY_KEY[key].label}
-                  </Link>
-                ))}
+              {auditPages.map((page) => (
+                <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+                  {page.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}
 
-        {hasChat && (
-          <Link href={PAGE_BY_KEY.dc_connect.href} className={linkClass(PAGE_BY_KEY.dc_connect.href)}>
-            {PAGE_BY_KEY.dc_connect.label}
+        {chatPages.map((page) => (
+          <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+            {page.label}
           </Link>
-        )}
+        ))}
       </nav>
     </aside>
   );
