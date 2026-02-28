@@ -2,44 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { CLIENT_PAGE_DEFINITIONS, DEFAULT_PAGE_ACCESS, type ClientPageKey, type PageAccessMap } from "@/lib/module-config";
 
-type ModuleMap = {
-  employees: boolean;
-  payroll: boolean;
-  in_out: boolean;
-  training: boolean;
-  committees: boolean;
-  documents: boolean;
-  audit: boolean;
-  chat: boolean;
-  notifications: boolean;
+type ModulesResponse = {
+  pages?: PageAccessMap;
 };
 
-const ALL_ENABLED: ModuleMap = {
-  employees: true,
-  payroll: true,
-  in_out: true,
-  training: true,
-  committees: true,
-  documents: true,
-  audit: true,
-  chat: true,
-  notifications: true,
+const PAGE_BY_KEY = Object.fromEntries(
+  CLIENT_PAGE_DEFINITIONS.map((page) => [page.key, page])
+) as Record<ClientPageKey, (typeof CLIENT_PAGE_DEFINITIONS)[number]>;
+
+const SALARY_GROUPS = {
+  payroll: ["payroll", "payroll_data", "payslip", "payslip_data"] as ClientPageKey[],
+  advance: ["advance", "advance_data"] as ClientPageKey[],
+  compliance: ["pf_challan", "esic_challan"] as ClientPageKey[],
+  attendance: ["in_out", "in_out_data"] as ClientPageKey[],
 };
 
 export default function ClientSidebar() {
   const pathname = usePathname();
-  const [modules, setModules] = useState<ModuleMap>(ALL_ENABLED);
+  const [pages, setPages] = useState<PageAccessMap>(DEFAULT_PAGE_ACCESS);
 
   useEffect(() => {
-    async function loadModules() {
+    async function loadAccess() {
       const res = await fetch("/api/client/modules", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as { data?: ModulesResponse };
       if (!res.ok) return;
-      setModules({ ...ALL_ENABLED, ...(data?.data?.modules || {}) });
+      setPages({ ...DEFAULT_PAGE_ACCESS, ...(data?.data?.pages || {}) });
     }
-    loadModules();
+
+    loadAccess();
   }, []);
 
   const inEmployeeData =
@@ -71,9 +64,11 @@ export default function ClientSidebar() {
     pathname.startsWith("/client/pf-challan") || pathname.startsWith("/client/esic-challan");
   const inAttendanceGroup =
     pathname.startsWith("/client/in-out") || pathname.startsWith("/client/in-out-data");
+
   const [openSalarySection, setOpenSalarySection] = useState<
     "payroll" | "advance" | "compliance" | "attendance" | "none" | null
   >(null);
+
   const activeSalarySection: "payroll" | "advance" | "compliance" | "attendance" | null =
     inPayrollGroup
       ? "payroll"
@@ -84,8 +79,27 @@ export default function ClientSidebar() {
       : inAttendanceGroup
       ? "attendance"
       : null;
+
   const visibleSalarySection =
     openSalarySection === "none" ? null : openSalarySection || activeSalarySection;
+
+  const visiblePageLinks = useMemo(() => {
+    const enabledKeys = Object.entries(pages)
+      .filter(([, enabled]) => enabled)
+      .map(([key]) => key as ClientPageKey);
+    return new Set(enabledKeys);
+  }, [pages]);
+
+  const hasEmployeeGroup = ["employee_master", "add_employee", "personal_documents"].some((key) =>
+    visiblePageLinks.has(key as ClientPageKey)
+  );
+  const hasAuditGroup = ["audit_dashboard", "training", "committees"].some((key) =>
+    visiblePageLinks.has(key as ClientPageKey)
+  );
+  const hasChat = visiblePageLinks.has("dc_connect");
+  const hasSalaryGroup = Object.values(SALARY_GROUPS).some((group) =>
+    group.some((key) => visiblePageLinks.has(key))
+  );
 
   const linkClass = (path: string) =>
     `block rounded-lg px-3 py-2 text-sm font-semibold transition ${
@@ -93,16 +107,13 @@ export default function ClientSidebar() {
         ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]"
         : "text-slate-200 hover:bg-white/10 hover:text-white"
     }`;
+
   const groupButtonClass = (active: boolean) =>
     `w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
       active
         ? "bg-cyan-400/15 text-cyan-100 ring-1 ring-cyan-300/30"
         : "text-slate-300 hover:bg-white/10 hover:text-white"
     }`;
-
-  const showEmployeeGroup = modules.employees || modules.documents;
-  const showSalaryGroup = modules.payroll || modules.in_out;
-  const showAuditGroup = modules.audit || modules.training || modules.committees;
 
   return (
     <aside className="w-56 shrink-0 border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
@@ -116,7 +127,7 @@ export default function ClientSidebar() {
           Dashboard
         </Link>
 
-        {showEmployeeGroup && (
+        {hasEmployeeGroup && (
           <div className="group">
             <button
               type="button"
@@ -131,29 +142,23 @@ export default function ClientSidebar() {
 
             <div
               className={`mt-1 rounded-lg p-2 ${
-                inEmployeeData ? "block bg-white/8 ring-1 ring-white/15" : "hidden bg-white/5 group-hover:block ring-1 ring-white/10"
+                inEmployeeData
+                  ? "block bg-white/8 ring-1 ring-white/15"
+                  : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {modules.employees && (
-                <>
-                  <Link href="/client/employees" className={linkClass("/client/employees")}>
-                    Employee Master
+              {(["employee_master", "add_employee", "personal_documents"] as ClientPageKey[])
+                .filter((key) => visiblePageLinks.has(key))
+                .map((key) => (
+                  <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
+                    {PAGE_BY_KEY[key].label}
                   </Link>
-                  <Link href="/client/employees/new" className={linkClass("/client/employees/new")}>
-                    Add New Employee
-                  </Link>
-                </>
-              )}
-              {modules.documents && (
-                <Link href="/client/documents" className={linkClass("/client/documents")}>
-                  Personal File Documents
-                </Link>
-              )}
+                ))}
             </div>
           </div>
         )}
 
-        {showSalaryGroup && (
+        {hasSalaryGroup && (
           <div className="group">
             <button
               type="button"
@@ -168,112 +173,63 @@ export default function ClientSidebar() {
 
             <div
               className={`mt-1 rounded-lg p-2 ${
-                inSalaryData ? "block bg-white/8 ring-1 ring-white/15" : "hidden bg-white/5 group-hover:block ring-1 ring-white/10"
+                inSalaryData
+                  ? "block bg-white/8 ring-1 ring-white/15"
+                  : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {modules.payroll && (
-                <>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      className={groupButtonClass(inPayrollGroup || visibleSalarySection === "payroll")}
-                      onClick={() =>
-                        setOpenSalarySection((prev) => (prev === "payroll" ? "none" : "payroll"))
-                      }
-                    >
-                      Payroll
-                    </button>
-                    {(inPayrollGroup || visibleSalarySection === "payroll") && (
-                      <div className="space-y-2 pl-2">
-                        <Link href="/client/payroll" className={linkClass("/client/payroll")}>
-                          Payroll
-                        </Link>
-                        <Link href="/client/payroll-data" className={linkClass("/client/payroll-data")}>
-                          Payroll Data
-                        </Link>
-                        <Link href="/client/payslip" className={linkClass("/client/payslip")}>
-                          Payslip
-                        </Link>
-                        <Link href="/client/payslip-data" className={linkClass("/client/payslip-data")}>
-                          Payslip Data
-                        </Link>
-                      </div>
-                    )}
-                  </div>
+              {(Object.entries(SALARY_GROUPS) as Array<
+                [keyof typeof SALARY_GROUPS, ClientPageKey[]]
+              >).map(([sectionKey, pageKeys]) => {
+                const visiblePages = pageKeys.filter((key) => visiblePageLinks.has(key));
+                if (visiblePages.length === 0) return null;
 
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      className={groupButtonClass(inAdvanceGroup || visibleSalarySection === "advance")}
-                      onClick={() =>
-                        setOpenSalarySection((prev) => (prev === "advance" ? "none" : "advance"))
-                      }
-                    >
-                      Advance
-                    </button>
-                    {(inAdvanceGroup || visibleSalarySection === "advance") && (
-                      <div className="space-y-2 pl-2">
-                        <Link href="/client/advance" className={linkClass("/client/advance")}>
-                          Advance
-                        </Link>
-                        <Link href="/client/advance-data" className={linkClass("/client/advance-data")}>
-                          Advance Data
-                        </Link>
-                      </div>
-                    )}
-                  </div>
+                const isActive =
+                  sectionKey === "payroll"
+                    ? inPayrollGroup || visibleSalarySection === "payroll"
+                    : sectionKey === "advance"
+                    ? inAdvanceGroup || visibleSalarySection === "advance"
+                    : sectionKey === "compliance"
+                    ? inComplianceGroup || visibleSalarySection === "compliance"
+                    : inAttendanceGroup || visibleSalarySection === "attendance";
 
-                  <div className="space-y-2">
+                return (
+                  <div key={sectionKey} className="space-y-2">
                     <button
                       type="button"
-                      className={groupButtonClass(inComplianceGroup || visibleSalarySection === "compliance")}
+                      className={groupButtonClass(isActive)}
                       onClick={() =>
-                        setOpenSalarySection((prev) => (prev === "compliance" ? "none" : "compliance"))
+                        setOpenSalarySection((prev) =>
+                          prev === sectionKey ? "none" : sectionKey
+                        )
                       }
                     >
-                      Compliance
+                      {sectionKey === "payroll"
+                        ? "Payroll"
+                        : sectionKey === "advance"
+                        ? "Advance"
+                        : sectionKey === "compliance"
+                        ? "Compliance"
+                        : "Attendance"}
                     </button>
-                    {(inComplianceGroup || visibleSalarySection === "compliance") && (
+
+                    {isActive && (
                       <div className="space-y-2 pl-2">
-                        <Link href="/client/pf-challan" className={linkClass("/client/pf-challan")}>
-                          PF Challan
-                        </Link>
-                        <Link href="/client/esic-challan" className={linkClass("/client/esic-challan")}>
-                          ESIC Challan
-                        </Link>
+                        {visiblePages.map((key) => (
+                          <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
+                            {PAGE_BY_KEY[key].label}
+                          </Link>
+                        ))}
                       </div>
                     )}
                   </div>
-                </>
-              )}
-              {modules.in_out && (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    className={groupButtonClass(inAttendanceGroup || visibleSalarySection === "attendance")}
-                    onClick={() =>
-                      setOpenSalarySection((prev) => (prev === "attendance" ? "none" : "attendance"))
-                    }
-                  >
-                    Attendance
-                  </button>
-                  {(inAttendanceGroup || visibleSalarySection === "attendance") && (
-                    <div className="space-y-2 pl-2">
-                      <Link href="/client/in-out" className={linkClass("/client/in-out")}>
-                        IN-OUT
-                      </Link>
-                      <Link href="/client/in-out-data" className={linkClass("/client/in-out-data")}>
-                        IN-OUT Data
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {showAuditGroup && (
+        {hasAuditGroup && (
           <div className="group">
             <button
               type="button"
@@ -288,31 +244,25 @@ export default function ClientSidebar() {
 
             <div
               className={`mt-1 rounded-lg p-2 ${
-                inAuditData ? "block bg-white/8 ring-1 ring-white/15" : "hidden bg-white/5 group-hover:block ring-1 ring-white/10"
+                inAuditData
+                  ? "block bg-white/8 ring-1 ring-white/15"
+                  : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
               }`}
             >
-              {modules.audit && (
-                <Link href="/client/audit" className={linkClass("/client/audit")}>
-                  Audit Dashboard
-                </Link>
-              )}
-              {modules.training && (
-                <Link href="/client/training" className={linkClass("/client/training")}>
-                  Training
-                </Link>
-              )}
-              {modules.committees && (
-                <Link href="/client/committees" className={linkClass("/client/committees")}>
-                  Committees
-                </Link>
-              )}
+              {(["audit_dashboard", "training", "committees"] as ClientPageKey[])
+                .filter((key) => visiblePageLinks.has(key))
+                .map((key) => (
+                  <Link key={key} href={PAGE_BY_KEY[key].href} className={linkClass(PAGE_BY_KEY[key].href)}>
+                    {PAGE_BY_KEY[key].label}
+                  </Link>
+                ))}
             </div>
           </div>
         )}
 
-        {modules.chat && (
-          <Link href="/client/chat" className={linkClass("/client/chat")}>
-            DC Connect
+        {hasChat && (
+          <Link href={PAGE_BY_KEY.dc_connect.href} className={linkClass(PAGE_BY_KEY.dc_connect.href)}>
+            {PAGE_BY_KEY.dc_connect.label}
           </Link>
         )}
       </nav>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import { CLIENT_PAGE_DEFINITIONS, DEFAULT_PAGE_ACCESS, type ClientPageKey, type PageAccessMap } from "@/lib/module-config";
 
 type Client = {
   id: string;
@@ -12,29 +13,6 @@ type Client = {
   contactNumber?: string | null;
   createdAt: string;
 };
-
-type ModuleMap = {
-  employees: boolean;
-  payroll: boolean;
-  in_out: boolean;
-  training: boolean;
-  committees: boolean;
-  documents: boolean;
-  audit: boolean;
-  chat: boolean;
-  notifications: boolean;
-};
-
-const ALL_MODULES: Array<{ key: keyof ModuleMap; name: string; href: string }> = [
-  { key: "employees", name: "Employee Master", href: "/client/employees" },
-  { key: "documents", name: "Personal Documents", href: "/client/documents" },
-  { key: "payroll", name: "Payroll", href: "/client/payroll" },
-  { key: "in_out", name: "In-Out", href: "/client/in-out" },
-  { key: "audit", name: "Audit Dashboard", href: "/client/audit" },
-  { key: "training", name: "Training", href: "/client/training" },
-  { key: "committees", name: "Committees", href: "/client/committees" },
-  { key: "chat", name: "DC Connect", href: "/client/chat" },
-];
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
@@ -59,7 +37,7 @@ function initials(name: string | null | undefined) {
 
 export default function ClientDashboardPage() {
   const [client, setClient] = useState<Client | null>(null);
-  const [modules, setModules] = useState<ModuleMap | null>(null);
+  const [pages, setPages] = useState<PageAccessMap>(DEFAULT_PAGE_ACCESS);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,10 +50,9 @@ export default function ClientDashboardPage() {
     logoUrl: "",
   });
 
-  const enabledModules = useMemo(() => {
-    if (!modules) return [];
-    return ALL_MODULES.filter((module) => modules[module.key]);
-  }, [modules]);
+  const enabledPages = useMemo(() => {
+    return CLIENT_PAGE_DEFINITIONS.filter((page) => pages[page.key]);
+  }, [pages]);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -103,7 +80,7 @@ export default function ClientDashboardPage() {
       const modulesRes = await fetch("/api/client/modules", { cache: "no-store" });
       const modulesData = await modulesRes.json().catch(() => ({}));
       if (modulesRes.ok) {
-        setModules(modulesData?.data?.modules || null);
+        setPages({ ...DEFAULT_PAGE_ACCESS, ...(modulesData?.data?.pages || {}) });
       }
 
       setLoading(false);
@@ -266,10 +243,10 @@ export default function ClientDashboardPage() {
                       {editing ? "Close Edit Panel" : "Edit Client Info"}
                     </button>
                     <a
-                      href="/client/employees"
+                      href={enabledPages[0]?.href || "/client/employees"}
                       className="block w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-white/15"
                     >
-                      Open Employee Master
+                      {enabledPages[0] ? `Open ${enabledPages[0].label}` : "Open Client Pages"}
                     </a>
                     <button
                       onClick={logout}
@@ -467,22 +444,22 @@ export default function ClientDashboardPage() {
                 Access Snapshot
               </p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                Active Modules
+                Active Pages
               </h2>
               <p className="mt-2 text-sm text-slate-600">
-                Quick shortcuts to the modules enabled for this client account.
+                Quick shortcuts to the client pages currently enabled for this account.
               </p>
 
               <div className="mt-5 grid gap-3">
-                {enabledModules.map((module) => (
+                {enabledPages.map((page) => (
                   <a
-                    key={module.name}
-                    href={module.href}
+                    key={page.key}
+                    href={page.href}
                     className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-base font-bold text-slate-900">{module.name}</p>
+                        <p className="text-base font-bold text-slate-900">{page.label}</p>
                         <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                           Enabled
                         </p>
@@ -494,9 +471,9 @@ export default function ClientDashboardPage() {
                   </a>
                 ))}
 
-                {enabledModules.length === 0 && (
+                {enabledPages.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-slate-500">
-                    No modules are enabled for this client account yet.
+                    No feature pages are enabled for this client account yet.
                   </div>
                 )}
               </div>

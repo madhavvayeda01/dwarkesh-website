@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireClient } from "@/lib/auth-guards";
-import { getClientModuleAccess, MODULE_KEYS, ModuleKey } from "@/lib/module-control";
+import { CLIENT_PAGE_KEYS, type ClientPageKey, MODULE_KEYS, type ModuleKey } from "@/lib/module-config";
+import {
+  getClientModuleAccess,
+  getClientPageAccess,
+} from "@/lib/module-control";
 
 const querySchema = z.object({
   module: z
@@ -11,6 +15,13 @@ const querySchema = z.object({
     .refine((value) => !value || MODULE_KEYS.includes(value as ModuleKey), {
       message: "Invalid module",
     }),
+  page: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || CLIENT_PAGE_KEYS.includes(value as ClientPageKey), {
+      message: "Invalid page",
+    }),
 });
 
 export async function GET(req: Request) {
@@ -18,19 +29,34 @@ export async function GET(req: Request) {
   if (error || !session || !session.clientId) return error ?? fail("Unauthorized", 401);
 
   const url = new URL(req.url);
-  const parsed = querySchema.safeParse({ module: url.searchParams.get("module") || undefined });
+  const parsed = querySchema.safeParse({
+    module: url.searchParams.get("module") || undefined,
+    page: url.searchParams.get("page") || undefined,
+  });
   if (!parsed.success) return fail("Invalid query", 400, parsed.error.flatten());
 
-  const access = await getClientModuleAccess(session.clientId);
+  const moduleAccess = await getClientModuleAccess(session.clientId);
+  const pageAccess = await getClientPageAccess(session.clientId);
   const moduleKey = parsed.data.module as ModuleKey | undefined;
+  const pageKey = parsed.data.page as ClientPageKey | undefined;
 
   if (moduleKey) {
     return ok("Module access fetched", {
       module: moduleKey,
-      enabled: access[moduleKey],
-      modules: access,
+      enabled: moduleAccess[moduleKey],
+      modules: moduleAccess,
+      pages: pageAccess,
     });
   }
 
-  return ok("Module access fetched", { modules: access });
+  if (pageKey) {
+    return ok("Page access fetched", {
+      page: pageKey,
+      enabled: pageAccess[pageKey],
+      modules: moduleAccess,
+      pages: pageAccess,
+    });
+  }
+
+  return ok("Module access fetched", { modules: moduleAccess, pages: pageAccess });
 }

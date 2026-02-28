@@ -33,7 +33,7 @@ export default function ClientAdvanceDataPage() {
         window.location.href = "/signin";
         return;
       }
-      const accessRes = await fetch("/api/client/modules?module=payroll", { cache: "no-store" });
+      const accessRes = await fetch("/api/client/modules?page=advance_data", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
       if (!accessRes.ok || !accessData?.data?.enabled) {
         setModuleEnabled(false);
@@ -94,8 +94,8 @@ export default function ClientAdvanceDataPage() {
       <main className="flex-1 p-8">
         {moduleEnabled === false ? (
           <div className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="text-xl font-bold text-blue-950">Module Disabled</h2>
-            <p className="mt-2 text-slate-600">Module not enabled by consultant.</p>
+            <h2 className="text-xl font-bold text-blue-950">Page Disabled</h2>
+            <p className="mt-2 text-slate-600">This page is not enabled by consultant.</p>
           </div>
         ) : (
           <>
@@ -180,4 +180,6 @@ export default function ClientAdvanceDataPage() {
     </div>
   );
 }
+
+
 
