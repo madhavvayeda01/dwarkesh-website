@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+:root {
+  --app-header-height: 8.5rem;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --app-header-height: 4.75rem;
+  }
+}
+
 html {
   color-scheme: light;
 }

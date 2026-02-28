@@ -1016,7 +1016,7 @@ export default function ClientEmployeesPage() {
     <div className="flex min-h-screen overflow-x-hidden bg-slate-100">
       <ClientSidebar />
 
-      <main className="flex-1 min-w-0 p-8">
+      <main className="flex-1 min-w-0 overflow-x-hidden p-8">
         {moduleEnabled === false ? (
           <div className="rounded-2xl bg-white p-6 shadow">
             <h2 className="text-xl font-bold text-blue-950">Module Disabled</h2>
@@ -1077,9 +1077,7 @@ export default function ClientEmployeesPage() {
             <button
               onClick={handleImport}
               className="rounded-2xl bg-green-600 px-6 py-2 font-semibold text-white hover:bg-green-500"
-            >
-              📥 Import File
-            </button>
+            >Import File</button>
           </div>
 
           {msg && <p className="mt-3 text-sm font-semibold text-slate-700">{msg}</p>}
@@ -1233,35 +1231,37 @@ export default function ClientEmployeesPage() {
               No employees found. Import an Excel/CSV to see data here.
             </p>
           ) : (
-            <div className="mt-6 max-w-full overflow-x-auto rounded-2xl border">
-              <table className="min-w-[3200px] w-full text-sm text-slate-900">
+            <div className="relative mt-6 max-w-full overflow-x-auto rounded-2xl border bg-white">
+              <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
                 <thead className="bg-slate-200 text-slate-700">
                   <tr>
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={column.key}
-                        className={`sticky top-0 p-3 ${
+                        className={`sticky top-[var(--app-header-height)] p-3 ${
                           column.key === "empNo"
-                            ? "left-0 z-40 min-w-[120px] bg-slate-200"
+                            ? "left-0 z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
-                              ? "left-[120px] z-40 min-w-[220px] bg-slate-200"
-                              : "z-30 bg-slate-200"
+                              ? "left-[120px] z-30 min-w-[220px] bg-slate-200"
+                              : "z-20 bg-slate-200"
                         }`}
                       >
                         {column.label}
                       </th>
                     ))}
-                    <th className="sticky top-0 z-30 bg-slate-200 p-3">Action</th>
+                    <th className="sticky top-[var(--app-header-height)] z-20 bg-slate-200 p-3">
+                      Action
+                    </th>
                   </tr>
                   <tr>
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={`${column.key}-search`}
-                        className={`sticky top-[44px] p-2 ${
+                        className={`sticky top-[calc(var(--app-header-height)+44px)] p-2 ${
                           column.key === "empNo"
-                            ? "left-0 z-40 min-w-[120px] bg-slate-200"
+                            ? "left-0 z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
-                              ? "left-[120px] z-40 min-w-[220px] bg-slate-200"
+                              ? "left-[120px] z-30 min-w-[220px] bg-slate-200"
                               : "z-20 bg-slate-200"
                         }`}
                       >
@@ -1275,7 +1275,7 @@ export default function ClientEmployeesPage() {
                         />
                       </th>
                     ))}
-                    <th className="sticky top-[44px] z-20 bg-slate-200 p-2" />
+                    <th className="sticky top-[calc(var(--app-header-height)+44px)] z-10 bg-slate-200 p-2" />
                   </tr>
                 </thead>
 
@@ -1293,9 +1293,9 @@ export default function ClientEmployeesPage() {
                           key={`${e.id}-${column.key}`}
                           className={`p-3 ${
                             column.key === "empNo"
-                              ? "sticky left-0 z-20 min-w-[120px] bg-white"
+                              ? "sticky left-0 z-10 min-w-[120px] bg-white"
                               : column.key === "fullName"
-                                ? "sticky left-[120px] z-20 min-w-[220px] bg-white font-semibold text-blue-950"
+                                ? "sticky left-[120px] z-10 min-w-[220px] bg-white font-semibold text-blue-950"
                                 : ""
                           }`}
                         >
@@ -1368,9 +1368,7 @@ export default function ClientEmployeesPage() {
             </div>
           )}
 
-          <p className="mt-3 text-xs text-slate-500">
-            👉 Scroll horizontally to view all columns.
-          </p>
+          <p className="mt-3 text-xs text-slate-500">Scroll horizontally to view all columns.</p>
         </div>
           </>
         )}
@@ -1378,13 +1376,13 @@ export default function ClientEmployeesPage() {
 
       <button
         onClick={() => setCheckerOpen((prev) => !prev)}
-        className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-xl bg-blue-950 px-3 py-3 text-xs font-bold text-white shadow-lg hover:bg-blue-900"
+        className="fixed bottom-6 right-4 z-40 rounded-full bg-blue-950 px-4 py-3 text-xs font-bold text-white shadow-lg hover:bg-blue-900"
       >
         {checkerOpen ? "Close Checker" : "Master Checker"}
       </button>
 
       <aside
-        className={`fixed right-0 top-0 z-50 h-screen w-full max-w-[460px] overflow-y-auto border-l bg-white p-4 shadow-2xl transition-transform duration-300 ${
+        className={`fixed right-0 top-[var(--app-header-height)] z-50 h-[calc(100vh-var(--app-header-height))] w-full max-w-[460px] overflow-y-auto border-l bg-white p-4 shadow-2xl transition-transform duration-300 ${
           checkerOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

@@ -19,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-slate-100 text-slate-900" suppressHydrationWarning>
-        <header className="sticky top-0 z-40 border-b border-cyan-300/20 bg-[radial-gradient(120%_120%_at_10%_0%,#22388b_0%,#172a76_45%,#0f1f5e_100%)] text-white shadow-[0_8px_24px_rgba(6,12,34,0.35)] backdrop-blur">
+        <header className="sticky top-0 z-[80] border-b border-cyan-300/20 bg-[radial-gradient(120%_120%_at_10%_0%,#22388b_0%,#172a76_45%,#0f1f5e_100%)] text-white shadow-[0_8px_24px_rgba(6,12,34,0.35)] backdrop-blur">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <Link
               href="/"
@@ -52,7 +52,7 @@ export default function RootLayout({
               Email: dwarkeshconsultancyahmedabad@gmail.com | Contact: +91 6353025552
             </p>
             <p className="mt-2 text-white/60">
-              © {new Date().getFullYear()} Dwarkesh Consultancy. All rights reserved.
+              Copyright {new Date().getFullYear()} Dwarkesh Consultancy. All rights reserved.
             </p>
           </div>
         </footer>
@@ -60,3 +60,4 @@ export default function RootLayout({
     </html>
   );
 }
+
