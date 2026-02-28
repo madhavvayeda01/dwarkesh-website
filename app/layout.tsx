@@ -1,14 +1,23 @@
 import "./globals.css";
 import Link from "next/link";
+import type { Metadata } from "next";
 import AdminNavLink from "@/components/AdminNavLink";
 import NotificationBell from "@/components/NotificationBell";
 import PrimaryNavLinks from "@/components/PrimaryNavLinks";
 import SessionNavLink from "@/components/SessionNavLink";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Dwarkesh Consultancy",
   description: "Compliance Made Simple.",
+  icons: {
+    icon: [
+      { url: "/logo.jpg", type: "image/jpeg" },
+      { url: "/icon.jpg", type: "image/jpeg" },
+    ],
+    shortcut: ["/logo.jpg"],
+    apple: ["/apple-icon.jpg"],
+  },
 };
 
 export default function RootLayout({
