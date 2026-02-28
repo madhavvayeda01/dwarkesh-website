@@ -78,7 +78,9 @@ export async function ensureClientModuleControl(clientId: string) {
 }
 
 export async function getClientModuleAccess(clientId: string): Promise<ModuleAccessMap> {
-  const row = await ensureClientModuleControl(clientId);
+  const row = await prisma.moduleControl.findUnique({
+    where: { clientId },
+  });
   return toModuleAccessMap(row);
 }
 

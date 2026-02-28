@@ -261,7 +261,11 @@ export default function ClientPayrollPage() {
       { cache: "no-store" }
     );
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
+    if (!res.ok) {
+      const message = data?.message || "Failed to load advance data for payroll.";
+      setStatus(message);
+      return;
+    }
 
     const payload = data?.data ?? data;
     const amounts = (payload?.amounts || {}) as Record<string, number>;
@@ -333,10 +337,14 @@ export default function ClientPayrollPage() {
       const canLoad = await checkLogin();
       if (!canLoad) return;
       await loadEmployees();
-      await applyAdvanceForPeriod(payrollMonth, payrollYear);
     }
     init();
   }, []);
+
+  useEffect(() => {
+    if (moduleEnabled !== true || rows.length === 0) return;
+    applyAdvanceForPeriod(payrollMonth, payrollYear);
+  }, [moduleEnabled, rows.length, payrollMonth, payrollYear]);
 
   function updateInput<K extends keyof PayrollInputs>(
     id: string,
@@ -552,12 +560,9 @@ export default function ClientPayrollPage() {
               </label>
               <select
                 value={payrollMonth}
-                onChange={async (e) => {
+                onChange={(e) => {
                   const nextMonth = Number(e.target.value);
                   setPayrollMonth(nextMonth);
-                  if (moduleEnabled === true) {
-                    await applyAdvanceForPeriod(nextMonth, payrollYear);
-                  }
                 }}
                 className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
               >
@@ -575,12 +580,9 @@ export default function ClientPayrollPage() {
               </label>
               <select
                 value={payrollYear}
-                onChange={async (e) => {
+                onChange={(e) => {
                   const nextYear = Number(e.target.value);
                   setPayrollYear(nextYear);
-                  if (moduleEnabled === true) {
-                    await applyAdvanceForPeriod(payrollMonth, nextYear);
-                  }
                 }}
                 className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
               >
