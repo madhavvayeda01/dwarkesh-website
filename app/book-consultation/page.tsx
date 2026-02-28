@@ -88,7 +88,7 @@ export default function BookConsultationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#dfe7f1_0%,#eef3f8_100%)]">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#dfe7f1_0%,#eef3f8_100%)] dark:bg-[linear-gradient(180deg,#08101d_0%,#0b1220_100%)]">
       <section className="mx-auto max-w-7xl px-6 py-12 md:px-8">
         <div className="overflow-hidden rounded-[36px] border border-white/60 bg-[radial-gradient(circle_at_top_left,#2948b6_0%,#182f7a_36%,#0f1c52_100%)] text-white shadow-[0_30px_90px_rgba(17,34,84,0.20)]">
           <div className="grid gap-8 p-8 md:p-10 lg:grid-cols-[1.1fr_0.9fr]">
@@ -154,14 +154,14 @@ export default function BookConsultationPage() {
         </div>
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <section className="rounded-[32px] border border-slate-200/70 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+          <section className="rounded-[32px] border border-slate-200/70 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-400">
               Request Form
             </p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 dark:text-slate-50">
               Share your consultation requirement
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300">
               Send your business details, preferred consultation type, and timing preference.
               The team can then coordinate the right discussion with the right context.
             </p>
@@ -169,7 +169,7 @@ export default function BookConsultationPage() {
             <form onSubmit={handleSubmit} className="mt-6 grid gap-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                   placeholder="Full Name *"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -177,7 +177,7 @@ export default function BookConsultationPage() {
                 />
 
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                   placeholder="Company Name"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
@@ -186,14 +186,14 @@ export default function BookConsultationPage() {
 
               <div className="grid gap-5 md:grid-cols-2">
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                   placeholder="Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
 
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                   placeholder="Phone *"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -205,7 +205,7 @@ export default function BookConsultationPage() {
                 <select
                   value={consultationType}
                   onChange={(e) => setConsultationType(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                 >
                   {consultationTracks.map((track) => (
                     <option key={track.title} value={track.title}>
@@ -215,7 +215,7 @@ export default function BookConsultationPage() {
                 </select>
 
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                   placeholder="Preferred day / time"
                   value={preferredSlot}
                   onChange={(e) => setPreferredSlot(e.target.value)}
@@ -223,7 +223,7 @@ export default function BookConsultationPage() {
               </div>
 
               <textarea
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
                 placeholder="Tell us what you need help with"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -239,16 +239,16 @@ export default function BookConsultationPage() {
               </button>
 
               {status && (
-                <p className="text-sm font-semibold text-slate-700">{status}</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{status}</p>
               )}
             </form>
           </section>
 
-          <section className="rounded-[32px] border border-slate-200/70 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+          <section className="rounded-[32px] border border-slate-200/70 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-400">
               What To Expect
             </p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 dark:text-slate-50">
               Structured, practical guidance
             </h2>
 
@@ -269,10 +269,10 @@ export default function BookConsultationPage() {
               ].map((item) => (
                 <div
                   key={item.title}
-                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f7faff_100%)] p-5"
+                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f7faff_100%)] p-5 dark:border-slate-700 dark:bg-[linear-gradient(180deg,#131d31_0%,#0f172a_100%)]"
                 >
-                  <h3 className="text-lg font-bold text-slate-950">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">{item.body}</p>
+                  <h3 className="text-lg font-bold text-slate-950 dark:text-slate-50">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{item.body}</p>
                 </div>
               ))}
             </div>
