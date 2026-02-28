@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireClient } from "@/lib/auth-guards";
-import { CLIENT_PAGE_KEYS, type ClientPageKey, MODULE_KEYS, type ModuleKey } from "@/lib/module-config";
+import { CLIENT_PAGE_BY_KEY, CLIENT_PAGE_KEYS, type ClientPageKey, MODULE_KEYS, type ModuleKey } from "@/lib/module-config";
 import {
   getClientModuleAccess,
   getClientPageAccess,
+  getImpersonationPageAccess,
 } from "@/lib/module-control";
 
 const querySchema = z.object({
@@ -36,7 +37,9 @@ export async function GET(req: Request) {
   if (!parsed.success) return fail("Invalid query", 400, parsed.error.flatten());
 
   const moduleAccess = await getClientModuleAccess(session.clientId);
-  const pageAccess = await getClientPageAccess(session.clientId);
+  const pageAccess = session.impersonatedByAdmin
+    ? getImpersonationPageAccess(moduleAccess)
+    : await getClientPageAccess(session.clientId);
   const moduleKey = parsed.data.module as ModuleKey | undefined;
   const pageKey = parsed.data.page as ClientPageKey | undefined;
 
@@ -50,9 +53,10 @@ export async function GET(req: Request) {
   }
 
   if (pageKey) {
+    const page = CLIENT_PAGE_BY_KEY[pageKey];
     return ok("Page access fetched", {
       page: pageKey,
-      enabled: pageAccess[pageKey],
+      enabled: pageAccess[pageKey] && moduleAccess[page.module],
       modules: moduleAccess,
       pages: pageAccess,
     });

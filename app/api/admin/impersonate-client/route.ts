@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     sub: client.id,
     role: "client",
     clientId: client.id,
+    impersonatedByAdmin: true,
   });
 
   const res = ok("Switched to client session", {
@@ -35,4 +36,3 @@ export async function POST(req: Request) {
   setSessionCookie(res as any, token);
   return res;
 }
-

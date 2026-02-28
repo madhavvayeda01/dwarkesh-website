@@ -68,6 +68,10 @@ export function toEffectivePageAccessMap(
   return effective;
 }
 
+export function getImpersonationPageAccess(moduleAccess: ModuleAccessMap): PageAccessMap {
+  return toEffectivePageAccessMap({ ...DEFAULT_PAGE_ACCESS }, moduleAccess);
+}
+
 export function toDbUpdatePayload(access: Partial<ModuleAccessMap>) {
   const payload: Record<string, boolean> = {};
   if (typeof access.employees === "boolean") payload.employeesEnabled = access.employees;

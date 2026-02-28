@@ -1,5 +1,6 @@
 import { fail } from "@/lib/api-response";
 import { getSessionFromCookies } from "@/lib/auth";
+import { CLIENT_PAGE_BY_KEY } from "@/lib/module-config";
 import {
   isClientModuleEnabled,
   isClientPageEnabled,
@@ -41,6 +42,19 @@ export async function requireClientModule(moduleKey: ModuleKey) {
 export async function requireClientPage(pageKey: ClientPageKey) {
   const base = await requireClient();
   if (base.error || !base.session || !base.session.clientId) return base;
+
+  if (base.session.impersonatedByAdmin) {
+    const page = CLIENT_PAGE_BY_KEY[pageKey];
+    const moduleEnabled = await isClientModuleEnabled(base.session.clientId, page.module);
+    if (!moduleEnabled) {
+      return {
+        error: fail("Module not enabled by consultant", 403, { module: page.module }),
+        session: null,
+      };
+    }
+
+    return base;
+  }
 
   const enabled = await isClientPageEnabled(base.session.clientId, pageKey);
   if (!enabled) {

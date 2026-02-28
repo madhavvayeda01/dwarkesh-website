@@ -8,6 +8,7 @@ export type SessionPayload = {
   sub: string;
   role: Role;
   clientId?: string;
+  impersonatedByAdmin?: boolean;
   adminId?: string;
   adminType?: "env_admin" | "consultant";
   adminName?: string;
