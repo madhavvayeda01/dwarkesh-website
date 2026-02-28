@@ -9,17 +9,12 @@ import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
+import { buildPersonalFileTemplateData } from "@/lib/personal-file-placeholders";
 
 const generateSchema = z.object({
   templateId: z.string().trim().min(1),
   empCode: z.string().trim().min(1),
 });
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-IN");
-}
 
 function sanitizeDocxXml(xml: string): string {
   return xml.replace(/<w:proofErr[^>]*\/>/g, "");
@@ -96,64 +91,7 @@ export async function POST(req: Request) {
       delimiters: { start: "{{", end: "}}" },
     });
 
-    const data = {
-      empNo: employee.empNo || "",
-      fileNo: employee.fileNo || "",
-      pfNo: employee.pfNo || "",
-      uanNo: employee.uanNo || "",
-      esicNo: employee.esicNo || "",
-      firstName: employee.firstName || "",
-      surName: employee.surName || "",
-      fatherSpouseName: employee.fatherSpouseName || "",
-      fullName: employee.fullName || "",
-      designation: employee.designation || "",
-      currentDept: employee.currentDept || "",
-      salaryWage: employee.salaryWage || "",
-      dob: formatDate(employee.dob),
-      doj: formatDate(employee.doj),
-      dor: formatDate(employee.dor),
-      reasonForExit: employee.reasonForExit || "",
-      panNo: employee.panNo || "",
-      aadharNo: employee.aadharNo || "",
-      elcIdNo: employee.elcIdNo || "",
-      drivingLicenceNo: employee.drivingLicenceNo || "",
-      bankAcNo: employee.bankAcNo || "",
-      ifscCode: employee.ifscCode || "",
-      bankName: employee.bankName || "",
-      mobileNumber: employee.mobileNumber || "",
-      gender: employee.gender || "",
-      religion: employee.religion || "",
-      nationality: employee.nationality || "",
-      typeOfEmployment: employee.typeOfEmployment || "",
-      maritalStatus: employee.maritalStatus || "",
-      educationQualification: employee.educationQualification || "",
-      experienceInRelevantField: employee.experienceInRelevantField || "",
-      presentAddress: employee.presentAddress || "",
-      permanentAddress: employee.permanentAddress || "",
-      village: employee.village || "",
-      thana: employee.thana || "",
-      subDivision: employee.subDivision || "",
-      postOffice: employee.postOffice || "",
-      district: employee.district || "",
-      state: employee.state || "",
-      pinCode: employee.pinCode || "",
-      temporaryAddress: employee.temporaryAddress || "",
-      nominee1Name: employee.nominee1Name || "",
-      nominee1Relation: employee.nominee1Relation || "",
-      nominee1BirthDate: formatDate(employee.nominee1BirthDate),
-      nominee1Age: employee.nominee1Age || "",
-      nominee1Proportion: employee.nominee1Proportion || "",
-      nominee2Name: employee.nominee2Name || "",
-      nominee2Relation: employee.nominee2Relation || "",
-      nominee2BirthDate: formatDate(employee.nominee2BirthDate),
-      nominee2Age: employee.nominee2Age || "",
-      nominee2Proportion: employee.nominee2Proportion || "",
-      client_name: template.client.name || "",
-      employee_full_name: employee.fullName || "",
-      employee_emp_no: employee.empNo || "",
-      employee_designation: employee.designation || "",
-      employee_department: employee.currentDept || "",
-    };
+    const data = buildPersonalFileTemplateData(employee, template.client.name || "");
 
     doc.setData(data);
     try {

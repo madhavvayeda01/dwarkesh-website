@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import { PERSONAL_FILE_PLACEHOLDERS } from "@/lib/personal-file-placeholders";
 
 type Client = {
   id: string;
@@ -52,6 +53,8 @@ export default function AdminDocumentAllotmentPage() {
   const [file, setFile] = useState<File | null>(null);
 
   const [status, setStatus] = useState("");
+  const clientPlaceholders = PERSONAL_FILE_PLACEHOLDERS.filter((item) => item.group === "Client");
+  const employeePlaceholders = PERSONAL_FILE_PLACEHOLDERS.filter((item) => item.group === "Employee");
 
   async function fetchClients() {
     const res = await fetch("/api/admin/clients-list");
@@ -247,20 +250,38 @@ export default function AdminDocumentAllotmentPage() {
             )}
 
             <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-  <p className="font-bold text-blue-950">Allowed placeholders:</p>
+              <p className="font-bold text-blue-950">Allowed placeholders:</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Use these exact keys inside your DOCX template with double curly braces, for
+                example: {"{{fullName}}"} or {"{{client_name}}"}.
+              </p>
 
-  <ul className="mt-2 list-disc pl-5">
-    <li>{"{{client_name}}"}</li>
-    <li>{"{{employee_full_name}}"}</li>
-    <li>{"{{employee_emp_no}}"}</li>
-    <li>{"{{employee_designation}}"}</li>
-    <li>{"{{employee_department}}"}</li>
-  </ul>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-bold text-blue-950">Client placeholders</p>
+                  <ul className="mt-3 space-y-2">
+                    {clientPlaceholders.map((item) => (
+                      <li key={item.key} className="flex flex-col">
+                        <code className="font-mono text-sm text-blue-900">{`{{${item.key}}}`}</code>
+                        <span className="text-xs text-slate-500">{item.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
-  <p className="mt-2 text-xs text-slate-500">
-    (We will add all 51 employee fields in next step)
-  </p>
-</div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-bold text-blue-950">Employee placeholders</p>
+                  <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                    {employeePlaceholders.map((item) => (
+                      <div key={item.key} className="rounded-xl bg-slate-50 p-3">
+                        <code className="block font-mono text-sm text-blue-900">{`{{${item.key}}}`}</code>
+                        <span className="mt-1 block text-xs text-slate-500">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
           </form>
 
