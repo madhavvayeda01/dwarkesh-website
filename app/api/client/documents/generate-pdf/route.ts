@@ -29,6 +29,102 @@ function extractDocxErrorDetails(error: any): string {
   );
 }
 
+function buildPrintableHtml(content: string) {
+  return `<!doctype html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          @page {
+            size: A4;
+            margin: 14mm 12mm;
+          }
+
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+          }
+
+          body {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 12pt;
+            line-height: 1.2;
+            color: #000000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .docx-root {
+            width: 100%;
+          }
+
+          p {
+            margin: 0 0 6pt;
+          }
+
+          h1,
+          h2,
+          h3,
+          h4,
+          h5,
+          h6 {
+            margin: 0 0 8pt;
+            line-height: 1.15;
+          }
+
+          table {
+            width: 100% !important;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin: 0 0 8pt;
+          }
+
+          tr {
+            page-break-inside: avoid;
+          }
+
+          td,
+          th {
+            border: 1px solid #000000 !important;
+            padding: 3pt 6pt;
+            vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+          }
+
+          td p,
+          th p {
+            margin: 0;
+          }
+
+          img {
+            max-width: 100%;
+            height: auto;
+          }
+
+          strong,
+          b {
+            font-weight: 700;
+          }
+
+          em,
+          i {
+            font-style: italic;
+          }
+
+          u {
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="docx-root">${content}</div>
+      </body>
+    </html>`;
+}
+
 async function readTemplateBytes(fileUrl: string) {
   if (/^https?:\/\//i.test(fileUrl)) {
     const res = await fetch(fileUrl);
@@ -109,26 +205,38 @@ export async function POST(req: Request) {
       compression: "DEFLATE",
     });
 
-    const htmlResult = await mammoth.convertToHtml({ buffer: updatedDocxBuffer });
-    const html = `
-      <html><head><meta charset="UTF-8" /><style>body { font-family: Arial, sans-serif; font-size: 12pt; }</style></head>
-      <body>${htmlResult.value}</body></html>
-    `;
+    const htmlResult = await mammoth.convertToHtml(
+      { buffer: updatedDocxBuffer },
+      {
+        includeDefaultStyleMap: true,
+      }
+    );
+    const html = buildPrintableHtml(htmlResult.value);
 
     const browser = await launchPdfBrowser();
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-    const pdfUint8 = await page.pdf({ format: "A4", printBackground: true });
-    await browser.close();
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
+      await page.emulateMediaType("screen");
+      await page.setContent(html, { waitUntil: "networkidle0" });
+      const pdfUint8 = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: { top: "0", right: "0", bottom: "0", left: "0" },
+      });
 
-    logger.info("pdf.generate.success", { clientId: session.clientId, templateId, empCode });
-    const binary = Uint8Array.from(pdfUint8);
-    return new Response(binary, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${employee.empNo}_${template.title}.pdf"`,
-      },
-    });
+      logger.info("pdf.generate.success", { clientId: session.clientId, templateId, empCode });
+      const binary = Uint8Array.from(pdfUint8);
+      return new Response(binary, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${employee.empNo}_${template.title}.pdf"`,
+        },
+      });
+    } finally {
+      await browser.close();
+    }
   } catch (err: any) {
     logger.error("pdf.generate.error", {
       clientId: session.clientId,
