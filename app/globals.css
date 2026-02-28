@@ -86,13 +86,17 @@ html.dark [class*="bg-blue-50/"] {
 }
 
 html.dark .bg-emerald-50,
+html.dark .bg-emerald-100,
+html.dark .bg-emerald-200,
 html.dark [class*="bg-emerald-50/"] {
   background-color: var(--dm-emerald-bg) !important;
   border-color: var(--dm-emerald-border) !important;
 }
 
+html.dark .bg-yellow-50,
 html.dark .bg-yellow-100,
 html.dark .bg-amber-50,
+html.dark .bg-amber-100,
 html.dark [class*="bg-yellow-100/"] {
   background-color: var(--dm-yellow-bg) !important;
   border-color: var(--dm-yellow-border) !important;
@@ -147,6 +151,11 @@ html.dark :is(.text-emerald-800, .text-emerald-700, .text-emerald-600) {
 
 html.dark :is(.text-yellow-700, .text-yellow-800, .text-amber-800, .text-amber-700) {
   color: var(--dm-yellow-text) !important;
+}
+
+html.dark :is(.bg-emerald-100, .bg-emerald-200) :is(.text-emerald-800, .text-emerald-700, .text-emerald-600),
+html.dark :is(.bg-yellow-50, .bg-yellow-100, .bg-amber-50, .bg-amber-100) :is(.text-yellow-700, .text-yellow-800, .text-amber-800, .text-amber-700) {
+  color: inherit !important;
 }
 
 html.dark :is(.text-red-700, .text-red-800, .text-red-600) {

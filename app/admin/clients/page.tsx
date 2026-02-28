@@ -391,11 +391,11 @@ export default function AdminClientsPage() {
                     return (
                       <article
                         key={client.id}
-                        className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-sm"
+                        className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
                       >
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex min-w-0 gap-4">
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_100%)] text-lg font-black text-blue-950">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 text-lg font-black text-blue-950">
                               {client.logoUrl ? (
                                 <img
                                   src={client.logoUrl}
