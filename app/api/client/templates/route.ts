@@ -3,7 +3,7 @@ import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
 
 export async function GET() {
-  const { error, session } = await requireClientModule("documents");
+  const { error, session } = await requireClientModule("employees");
   if (error || !session) return error;
 
   try {

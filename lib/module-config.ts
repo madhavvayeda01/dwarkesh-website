@@ -59,7 +59,7 @@ export const CLIENT_PAGE_DEFINITIONS = [
     key: "personal_documents",
     label: "Personal File Documents",
     href: "/client/documents",
-    module: "documents",
+    module: "employees",
     navGroup: "employee_data",
     sectionLabel: "Employee Data",
   },

@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   }
 
   if (moduleKey === "documents") {
-    const guard = await requireClientModule("documents");
+    const guard = await requireClientModule("employees");
     if (guard.error || !guard.session) return guard.error;
     const prefix = `training-generated/${guard.session.clientId}/${parsed.data.module}/`;
     const listed = await listSupabaseFilesByPrefix(prefix);

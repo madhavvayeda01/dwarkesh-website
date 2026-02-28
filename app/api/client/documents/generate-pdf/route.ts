@@ -48,7 +48,7 @@ async function readTemplateBytes(fileUrl: string) {
 }
 
 export async function POST(req: Request) {
-  const { error, session } = await requireClientModule("documents");
+  const { error, session } = await requireClientModule("employees");
   if (error || !session) return error;
 
   try {
