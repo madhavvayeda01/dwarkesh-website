@@ -9,7 +9,7 @@ smokeDescribe("API smoke tests", () => {
 
   const adminDescribe = adminUsername && adminPassword ? describe : describe.skip;
 
-  adminDescribe("admin auth + employees", () => {
+  adminDescribe("admin auth", () => {
     const agent = request.agent(baseUrl);
 
     it("logs in with admin credentials", async () => {
@@ -24,11 +24,11 @@ smokeDescribe("API smoke tests", () => {
       expect(res.headers["set-cookie"]?.join(";") || "").toContain("session_token=");
     });
 
-    it("reads employees list using authenticated session", async () => {
-      const res = await agent.get("/api/admin/employees");
+    it("reads admin settings using authenticated session", async () => {
+      const res = await agent.get("/api/admin/settings");
       expect(res.status).toBe(200);
       expect(res.body?.success).toBe(true);
-      expect(Array.isArray(res.body?.data?.employees)).toBe(true);
+      expect(typeof res.body?.data?.consultantCount).toBe("number");
     });
   });
 
