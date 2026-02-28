@@ -55,6 +55,7 @@ model Employee {
   surName            String?
   fatherSpouseName   String?
   fullName           String?
+  employmentStatus   EmployeeStatus @default(ACTIVE)
 
   designation  String?
   currentDept  String?
@@ -111,6 +112,7 @@ model Employee {
   payrollRecords PayrollRecord[]
 
   @@index([clientId])
+  @@index([clientId, employmentStatus])
 }
 
 model Attendance {
@@ -274,4 +276,9 @@ model PayrollRecord {
   @@unique([clientId, year, month, employeeCode])
   @@index([clientId, year, month])
   @@index([clientId, year, month, employeeId])
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
 }

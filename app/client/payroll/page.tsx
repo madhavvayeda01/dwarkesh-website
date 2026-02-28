@@ -6,6 +6,7 @@ import ClientSidebar from "@/components/ClientSidebar";
 type Employee = {
   id: string;
   empNo: string | null;
+  employmentStatus: "ACTIVE" | "INACTIVE";
   uanNo: string | null;
   esicNo: string | null;
   fullName: string | null;
@@ -295,16 +296,18 @@ export default function ClientPayrollPage() {
       const res = await fetch("/api/client/employees", { cache: "no-store" });
       const data = await res.json();
       const payload = data?.data ?? data;
-      const employees: Employee[] = payload.employees || [];
+      const employees: Employee[] = (payload.employees || []).filter(
+        (employee: Employee) => employee.employmentStatus === "ACTIVE"
+      );
 
       setRows(
         employees.map((employee, index) => ({
           id: employee.id,
           srNo: index + 1,
+          status: employee.employmentStatus,
           uanNo: employee.uanNo || "",
           esicNo: employee.esicNo || "",
           empNo: employee.empNo || "",
-          status: "",
           employeeName: employee.fullName || "",
           department: employee.currentDept || "",
           designation: employee.designation || "",

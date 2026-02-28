@@ -7,6 +7,7 @@ import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { normalizeEmployeeCodeOrNull } from "@/lib/employee-code";
 import { normalizeImportedDate } from "@/lib/excel-date";
+import { normalizeEmploymentStatus } from "@/lib/employee-data";
 
 function clean(v: unknown): string | undefined {
   if (v === undefined || v === null) return undefined;
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
           clean(r["Full Name"]) ??
           [clean(r["First Name"]), clean(r["Sur Name"])].filter(Boolean).join(" ") ??
           "UNKNOWN",
+        employmentStatus: normalizeEmploymentStatus(r["Status"]),
         designation: clean(r["Designation"]),
         currentDept: clean(r["Current Dept."]),
         salaryWage: clean(r["Salary/Wage"]),

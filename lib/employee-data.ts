@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { normalizeEmployeeCodeOrNull } from "@/lib/employee-code";
 
 type InputBody = Record<string, unknown>;
+const EMPLOYMENT_STATUS_VALUES = ["ACTIVE", "INACTIVE"] as const;
+type EmploymentStatusValue = (typeof EMPLOYMENT_STATUS_VALUES)[number];
 
 function readString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -33,6 +35,17 @@ function pickForUpdate(body: InputBody, ...keys: string[]): string | null | unde
   return undefined;
 }
 
+export function normalizeEmploymentStatus(
+  value: unknown,
+  fallback: EmploymentStatusValue = "ACTIVE"
+): EmploymentStatusValue {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toUpperCase();
+  return EMPLOYMENT_STATUS_VALUES.includes(normalized as EmploymentStatusValue)
+    ? (normalized as EmploymentStatusValue)
+    : fallback;
+}
+
 export function buildEmployeeCreateData(
   body: InputBody,
   clientId: string
@@ -55,6 +68,7 @@ export function buildEmployeeCreateData(
     surName,
     fatherSpouseName: pick(body, "fatherSpouseName"),
     fullName,
+    employmentStatus: normalizeEmploymentStatus(body.employmentStatus),
 
     designation: pick(body, "designation"),
     currentDept: pick(body, "currentDept"),
@@ -128,6 +142,13 @@ export function buildEmployeeUpdateData(
       : rawEmpNo === null
         ? null
         : normalizeEmployeeCodeOrNull(rawEmpNo);
+  const rawEmploymentStatus = body.employmentStatus;
+  const employmentStatus =
+    rawEmploymentStatus === undefined
+      ? undefined
+      : rawEmploymentStatus === null
+        ? "ACTIVE"
+        : normalizeEmploymentStatus(rawEmploymentStatus);
 
   return {
     empNo,
@@ -140,6 +161,7 @@ export function buildEmployeeUpdateData(
     surName,
     fatherSpouseName: pickForUpdate(body, "fatherSpouseName"),
     fullName,
+    employmentStatus,
 
     designation: pickForUpdate(body, "designation"),
     currentDept: pickForUpdate(body, "currentDept"),

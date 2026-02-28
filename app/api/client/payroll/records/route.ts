@@ -176,11 +176,13 @@ export async function POST(req: Request) {
   if (!uploaded.ok) return fail(uploaded.error, 500);
 
   const employees = await prisma.employee.findMany({
-    where: { clientId },
+    where: { clientId, employmentStatus: "ACTIVE" },
     select: { id: true, empNo: true },
   });
   const employeeByCode = new Map<string, string>();
+  const activeEmployeeIds = new Set<string>();
   for (const employee of employees) {
+    activeEmployeeIds.add(employee.id);
     const key = normalizeEmployeeCode(employee.empNo);
     if (key && !employeeByCode.has(key)) employeeByCode.set(key, employee.id);
   }
@@ -202,7 +204,11 @@ export async function POST(req: Request) {
       normalizeEmployeeCode(normalizedEmployeeId);
     if (!normalizedCode) continue;
     const resolvedEmployeeId =
-      normalizedEmployeeId || employeeByCode.get(normalizedCode) || null;
+      (normalizedEmployeeId && activeEmployeeIds.has(normalizedEmployeeId)
+        ? normalizedEmployeeId
+        : null) ||
+      employeeByCode.get(normalizedCode) ||
+      null;
     const dedupeKey = resolvedEmployeeId || normalizedCode;
     dedupedPayrollByCode.set(dedupeKey, {
       clientId,

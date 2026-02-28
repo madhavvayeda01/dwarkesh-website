@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
 
-type FieldType = "text" | "date" | "textarea";
+type FieldType = "text" | "date" | "textarea" | "select";
 
 type FieldConfig = {
   key: string;
   label: string;
   type?: FieldType;
+  options?: string[];
 };
 
 const fields: FieldConfig[] = [
@@ -21,6 +22,7 @@ const fields: FieldConfig[] = [
   { key: "surName", label: "Sur Name" },
   { key: "fatherSpouseName", label: "Father/Spouse Name" },
   { key: "fullName", label: "Full Name" },
+  { key: "employmentStatus", label: "Status", type: "select", options: ["ACTIVE", "INACTIVE"] },
   { key: "designation", label: "Designation" },
   { key: "currentDept", label: "Current Dept." },
   { key: "salaryWage", label: "Salary/Wage" },
@@ -65,10 +67,9 @@ const fields: FieldConfig[] = [
   { key: "nominee2Proportion", label: "Nominee 2 Proportion" },
 ];
 
-const emptyForm = Object.fromEntries(fields.map((field) => [field.key, ""])) as Record<
-  string,
-  string
->;
+const emptyForm = Object.fromEntries(
+  fields.map((field) => [field.key, field.key === "employmentStatus" ? "ACTIVE" : ""])
+) as Record<string, string>;
 
 export default function AddNewEmployeePage() {
   const [form, setForm] = useState<Record<string, string>>(emptyForm);
@@ -174,6 +175,18 @@ export default function AddNewEmployeePage() {
                           rows={2}
                           className="w-full rounded-xl border bg-white px-3 py-2 text-slate-900"
                         />
+                      ) : field.type === "select" ? (
+                        <select
+                          value={form[field.key]}
+                          onChange={(e) => updateField(field.key, e.target.value)}
+                          className="w-full rounded-xl border bg-white px-3 py-2 text-slate-900"
+                        >
+                          {(field.options || []).map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
                         <input
                           type={field.type === "date" ? "date" : "text"}

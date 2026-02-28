@@ -8,6 +8,7 @@ import { normalizeEmployeeCode } from "@/lib/employee-code";
 type PayrollDataRow = {
   id: string;
   srNo: number;
+  employmentStatus: "ACTIVE" | "INACTIVE";
   uanNo: string;
   esicNo: string;
   empNo: string;
@@ -76,6 +77,7 @@ function buildRows(
   employees: Array<{
     id: string;
     empNo: string | null;
+    employmentStatus: "ACTIVE" | "INACTIVE";
     uanNo: string | null;
     esicNo: string | null;
     fullName: string | null;
@@ -109,10 +111,11 @@ function buildRows(
     return {
       id: employee.id,
       srNo: index + 1,
+      employmentStatus: employee.employmentStatus,
       uanNo: employee.uanNo || "",
       esicNo: employee.esicNo || "",
       empNo,
-      status: "",
+      status: employee.employmentStatus,
       employeeName: employee.fullName || "",
       department: employee.currentDept || "",
       designation: employee.designation || "",
@@ -140,11 +143,12 @@ export async function GET() {
 
   try {
     const employees = await prisma.employee.findMany({
-      where: { clientId: session.clientId },
+      where: { clientId: session.clientId, employmentStatus: "ACTIVE" },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
         empNo: true,
+        employmentStatus: true,
         uanNo: true,
         esicNo: true,
         fullName: true,
@@ -270,11 +274,12 @@ export async function POST(req: Request) {
     }
 
     const employees = await prisma.employee.findMany({
-      where: { clientId: session.clientId },
+      where: { clientId: session.clientId, employmentStatus: "ACTIVE" },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
         empNo: true,
+        employmentStatus: true,
         uanNo: true,
         esicNo: true,
         fullName: true,
