@@ -1279,7 +1279,7 @@ export default function ClientEmployeesPage() {
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={column.key}
-                        className={`sticky top-[var(--app-header-height)] p-3 ${
+                        className={`p-3 ${
                           column.key === "empNo"
                             ? "left-0 z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
@@ -1290,7 +1290,7 @@ export default function ClientEmployeesPage() {
                         {column.label}
                       </th>
                     ))}
-                    <th className="sticky top-[var(--app-header-height)] z-20 bg-slate-200 p-3">
+                    <th className="z-20 bg-slate-200 p-3">
                       Action
                     </th>
                   </tr>
@@ -1298,7 +1298,7 @@ export default function ClientEmployeesPage() {
                     {EMPLOYEE_COLUMNS.map((column) => (
                       <th
                         key={`${column.key}-search`}
-                        className={`sticky top-[calc(var(--app-header-height)+44px)] p-2 ${
+                        className={`p-2 ${
                           column.key === "empNo"
                             ? "left-0 z-30 min-w-[120px] bg-slate-200"
                             : column.key === "fullName"
@@ -1316,7 +1316,7 @@ export default function ClientEmployeesPage() {
                         />
                       </th>
                     ))}
-                    <th className="sticky top-[calc(var(--app-header-height)+44px)] z-10 bg-slate-200 p-2" />
+                    <th className="z-10 bg-slate-200 p-2" />
                   </tr>
                 </thead>
 
