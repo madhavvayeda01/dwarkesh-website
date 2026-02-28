@@ -3,11 +3,11 @@ export const ADMIN_PAGE_DEFINITIONS = [
   { key: "client_onboarding", label: "Client Onboarding", href: "/admin/clients", group: "client", groupLabel: "Client" },
   { key: "module_control", label: "Module Control", href: "/admin/module-control", group: "core", groupLabel: "Core" },
   { key: "settings", label: "Settings", href: "/admin/settings", group: "core", groupLabel: "Core" },
+  { key: "document_allotment", label: "Personal File Generator", href: "/admin/document-allotment", group: "hr", groupLabel: "HR" },
   { key: "holiday_master", label: "Holiday Master", href: "/admin/holiday-master", group: "ops", groupLabel: "Operations" },
   { key: "in_out_generator", label: "In-Out Generator", href: "/admin/in-out", group: "ops", groupLabel: "Operations" },
   { key: "program_audit", label: "Add Audit", href: "/admin/audit/program", group: "audit", groupLabel: "Audit Module" },
   { key: "client_audit_log", label: "Client Audit Log", href: "/admin/audit/client", group: "audit", groupLabel: "Audit Module" },
-  { key: "document_allotment", label: "Document Allotment", href: "/admin/document-allotment", group: "audit", groupLabel: "Audit Module" },
   { key: "training_calendar", label: "Training Calendar", href: "/admin/training-calendar", group: "audit", groupLabel: "Audit Module" },
   { key: "dc_connect", label: "DC Connect", href: "/admin/client-connect", group: "chat", groupLabel: "Communication" },
 ] as const;

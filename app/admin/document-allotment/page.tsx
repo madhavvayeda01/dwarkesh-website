@@ -157,7 +157,7 @@ export default function AdminDocumentAllotmentPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold text-blue-950 md:text-4xl">
-                Document Allotment
+                Personal File Generator
               </h1>
               <p className="mt-2 text-slate-600">
                 Upload DOCX templates under <b>Personal File</b> group.
