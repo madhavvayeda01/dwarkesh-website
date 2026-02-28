@@ -17,6 +17,16 @@ model Lead {
   createdAt   DateTime @default(now())
 }
 
+model Consultant {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Client {
   id            String   @id @default(cuid())
   name          String

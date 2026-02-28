@@ -9,6 +9,11 @@ export async function GET() {
 
   return ok("Authenticated", {
     loggedIn: true,
-    admin: "admin",
+    admin: {
+      id: session.adminId || "env-admin",
+      type: session.adminType || "env_admin",
+      name: session.adminName || "Primary Admin",
+      email: session.adminEmail || process.env.ADMIN_USERNAME || "admin",
+    },
   });
 }

@@ -24,10 +24,52 @@ export async function POST(req: Request) {
       usernameOrEmail === process.env.ADMIN_USERNAME &&
       password === process.env.ADMIN_PASSWORD
     ) {
-      const token = signJwt({ sub: "admin", role: "admin" });
+      const token = signJwt({
+        sub: "admin",
+        role: "admin",
+        adminType: "env_admin",
+        adminName: "Primary Admin",
+        adminEmail: process.env.ADMIN_USERNAME || "admin",
+      });
       const res = ok("Login successful", { role: "admin", redirectTo: "/admin" });
       setSessionCookie(res as any, token);
       logger.info("auth.login.success", { role: "admin", usernameOrEmail });
+      return res;
+    }
+
+    const consultant = await prisma.consultant.findUnique({
+      where: { email: usernameOrEmail },
+    });
+
+    if (consultant) {
+      if (!consultant.active) {
+        logger.warn("auth.login.consultant_inactive", { consultantId: consultant.id });
+        return fail("This consultant account is inactive", 403);
+      }
+
+      const validConsultantPassword = await bcrypt.compare(password, consultant.password);
+      if (!validConsultantPassword) {
+        logger.warn("auth.login.invalid_consultant_password", {
+          usernameOrEmail,
+          consultantId: consultant.id,
+        });
+        return fail("Invalid username/email or password", 401);
+      }
+
+      const token = signJwt({
+        sub: consultant.id,
+        role: "admin",
+        adminId: consultant.id,
+        adminType: "consultant",
+        adminName: consultant.name,
+        adminEmail: consultant.email,
+      });
+      const res = ok("Login successful", {
+        role: "admin",
+        redirectTo: "/admin",
+      });
+      setSessionCookie(res as any, token);
+      logger.info("auth.login.success", { role: "consultant", consultantId: consultant.id });
       return res;
     }
 
