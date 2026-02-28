@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
+    "@sparticuz/chromium": "^143.0.4",
     "bcrypt": "^6.0.0",
     "docxtemplater": "^3.67.6",
     "hyperformula": "^3.2.0",
@@ -23,6 +24,7 @@
     "pizzip": "^3.2.0",
     "prisma": "^6.19.2",
     "puppeteer": "^24.36.0",
+    "puppeteer-core": "^24.37.5",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "xlsx": "^0.18.5",

@@ -1,6 +1,5 @@
 import path from "node:path";
 import * as XLSX from "xlsx";
-import puppeteer from "puppeteer";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
@@ -10,6 +9,7 @@ import {
   uploadBufferToSupabase,
 } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
+import { launchPdfBrowser } from "@/lib/pdf-browser";
 
 const generateSchema = z.object({
   month: z.number().int().min(0).max(11),
@@ -289,10 +289,7 @@ export async function POST(req: Request) {
     client?.address || ""
   );
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await launchPdfBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });

@@ -4,12 +4,12 @@ import path from "node:path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import mammoth from "mammoth";
-import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { buildPersonalFileTemplateData } from "@/lib/personal-file-placeholders";
+import { launchPdfBrowser } from "@/lib/pdf-browser";
 
 const generateSchema = z.object({
   templateId: z.string().trim().min(1),
@@ -115,10 +115,7 @@ export async function POST(req: Request) {
       <body>${htmlResult.value}</body></html>
     `;
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    const browser = await launchPdfBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
     const pdfUint8 = await page.pdf({ format: "A4", printBackground: true });

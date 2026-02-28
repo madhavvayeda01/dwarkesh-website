@@ -4,13 +4,13 @@ import path from "node:path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import mammoth from "mammoth";
-import puppeteer from "puppeteer";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { generateTrainingCalendar } from "@/lib/training-calendar";
 import { prisma } from "@/lib/prisma";
 import { ensureStorageConfigured, uploadBufferToSupabase } from "@/lib/storage";
+import { launchPdfBrowser } from "@/lib/pdf-browser";
 
 const requestSchema = z.object({
   companyId: z.string().trim().min(1),
@@ -69,10 +69,7 @@ async function convertDocxToPdf(docxBuffer: Buffer) {
     </html>
   `;
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await launchPdfBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
