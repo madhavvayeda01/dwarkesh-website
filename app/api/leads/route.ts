@@ -86,8 +86,9 @@ export async function POST(req: Request) {
       },
       { status: 201 }
     );
-  } catch (err: any) {
-    logger.error("lead.create.error", { message: err?.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error("lead.create.error", { message });
     return NextResponse.json(
       {
         ok: false,

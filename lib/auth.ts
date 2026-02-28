@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 
 type Role = "admin" | "client";
 
@@ -36,7 +37,14 @@ function fromB64url(value: string) {
 }
 
 function getSecret() {
-  return process.env.JWT_SECRET || process.env.ADMIN_PASSWORD || "dev-secret";
+  const secret = process.env.JWT_SECRET || process.env.ADMIN_PASSWORD;
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-secret";
+  }
+
+  throw new Error("JWT_SECRET or ADMIN_PASSWORD must be configured for session signing.");
 }
 
 export function signJwt(payload: Omit<SessionPayload, "exp">) {
@@ -72,7 +80,7 @@ export async function getSessionFromCookies() {
   return verifyJwt(token);
 }
 
-export function setSessionCookie(response: Response & { cookies: any }, token: string) {
+export function setSessionCookie(response: NextResponse, token: string) {
   response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     path: "/",

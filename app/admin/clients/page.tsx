@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
 type ClientRecord = {
@@ -60,21 +60,7 @@ export default function AdminClientsPage() {
     );
   }, [clients, search]);
 
-  useEffect(() => {
-    async function checkLogin() {
-      const res = await fetch("/api/admin/me");
-      const data = await res.json().catch(() => ({}));
-      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
-      if (!loggedIn) {
-        window.location.href = "/signin";
-        return;
-      }
-      await loadClients();
-    }
-    checkLogin();
-  }, []);
-
-  async function loadClients() {
+  const loadClients = useCallback(async () => {
     setLoadingClients(true);
     const res = await fetch("/api/admin/clients-list", { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
@@ -86,7 +72,22 @@ export default function AdminClientsPage() {
 
     setClients(data?.data?.clients || []);
     setLoadingClients(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    async function checkLogin() {
+      const res = await fetch("/api/admin/me");
+      const data = await res.json().catch(() => ({}));
+      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
+      if (!loggedIn) {
+        window.location.assign("/signin");
+        return;
+      }
+      await loadClients();
+    }
+
+    void checkLogin();
+  }, [loadClients]);
 
   async function handleLogoUpload(file: File) {
     setUploading(true);
@@ -173,7 +174,7 @@ export default function AdminClientsPage() {
       return;
     }
 
-    window.location.href = payload?.redirectTo || "/client-dashboard";
+    window.location.assign(payload?.redirectTo || "/client-dashboard");
   }
 
   async function deleteClient(client: ClientRecord) {

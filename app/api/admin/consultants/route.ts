@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
@@ -36,8 +37,10 @@ export async function POST(req: Request) {
   const parsed = createConsultantSchema.safeParse(await req.json());
   if (!parsed.success) return fail("Invalid consultant payload", 400, parsed.error.flatten());
 
+  const normalizedEmail = parsed.data.email.trim().toLowerCase();
+
   const exists = await prisma.consultant.findUnique({
-    where: { email: parsed.data.email },
+    where: { email: normalizedEmail },
     select: { id: true },
   });
 
@@ -45,23 +48,43 @@ export async function POST(req: Request) {
     return fail("A consultant with this email already exists.", 409);
   }
 
-  const password = await bcrypt.hash(parsed.data.password, 10);
-  const consultant = await prisma.consultant.create({
-    data: {
-      name: parsed.data.name.trim(),
-      email: parsed.data.email.trim().toLowerCase(),
-      password,
-      active: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      active: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+  const existingClient = await prisma.client.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
   });
 
-  return ok("Consultant created", { consultant }, 201);
+  if (existingClient) {
+    return fail("This email is already being used by a client account.", 409);
+  }
+
+  const password = await bcrypt.hash(parsed.data.password, 10);
+  try {
+    const consultant = await prisma.consultant.create({
+      data: {
+        name: parsed.data.name.trim(),
+        email: normalizedEmail,
+        password,
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return ok("Consultant created", { consultant }, 201);
+  } catch (createError: unknown) {
+    if (
+      createError instanceof Prisma.PrismaClientKnownRequestError &&
+      createError.code === "P2002"
+    ) {
+      return fail("A consultant with this email already exists.", 409);
+    }
+
+    throw createError;
+  }
 }

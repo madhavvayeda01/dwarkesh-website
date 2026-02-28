@@ -1,8 +1,9 @@
 import request from "supertest";
 
 const baseUrl = process.env.TEST_BASE_URL || "http://localhost:3000";
+const smokeDescribe = process.env.TEST_BASE_URL ? describe : describe.skip;
 
-describe("API smoke tests", () => {
+smokeDescribe("API smoke tests", () => {
   const adminUsername = process.env.TEST_ADMIN_USERNAME || process.env.ADMIN_USERNAME;
   const adminPassword = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
 

@@ -12,16 +12,21 @@ function applyTheme(mode: ThemeMode) {
 }
 
 export default function ThemeToggle() {
-  const [mode, setMode] = useState<ThemeMode>("light");
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+
+    const saved = localStorage.getItem("theme_mode");
+    if (saved === "dark" || saved === "light") {
+      return saved;
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme_mode");
-    if (saved === "dark" || saved === "light") {
-      setMode(saved);
-    } else {
-      setMode(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    }
     setMounted(true);
   }, []);
 

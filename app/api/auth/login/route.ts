@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +18,7 @@ export async function POST(req: Request) {
     }
 
     const { usernameOrEmail, password } = parsed.data;
+    const normalizedIdentifier = usernameOrEmail.trim().toLowerCase();
 
     if (
       usernameOrEmail === process.env.ADMIN_USERNAME &&
@@ -32,30 +32,34 @@ export async function POST(req: Request) {
         adminEmail: process.env.ADMIN_USERNAME || "admin",
       });
       const res = ok("Login successful", { role: "admin", redirectTo: "/admin" });
-      setSessionCookie(res as any, token);
+      setSessionCookie(res, token);
       logger.info("auth.login.success", { role: "admin", usernameOrEmail });
       return res;
     }
 
-    const consultant = await prisma.consultant.findUnique({
-      where: { email: usernameOrEmail },
-    });
+    const [consultant, client] = await Promise.all([
+      prisma.consultant.findUnique({
+        where: { email: normalizedIdentifier },
+      }),
+      prisma.client.findUnique({
+        where: { email: normalizedIdentifier },
+      }),
+    ]);
 
-    if (consultant) {
-      if (!consultant.active) {
-        logger.warn("auth.login.consultant_inactive", { consultantId: consultant.id });
-        return fail("This consultant account is inactive", 403);
-      }
+    if (consultant && client) {
+      logger.warn("auth.login.email_namespace_collision", {
+        identifier: normalizedIdentifier,
+        consultantId: consultant.id,
+        clientId: client.id,
+      });
+    }
 
-      const validConsultantPassword = await bcrypt.compare(password, consultant.password);
-      if (!validConsultantPassword) {
-        logger.warn("auth.login.invalid_consultant_password", {
-          usernameOrEmail,
-          consultantId: consultant.id,
-        });
-        return fail("Invalid username/email or password", 401);
-      }
+    let validConsultantPassword = false;
+    if (consultant?.active) {
+      validConsultantPassword = await bcrypt.compare(password, consultant.password);
+    }
 
+    if (consultant?.active && validConsultantPassword) {
       const token = signJwt({
         sub: consultant.id,
         role: "admin",
@@ -68,16 +72,24 @@ export async function POST(req: Request) {
         role: "admin",
         redirectTo: "/admin",
       });
-      setSessionCookie(res as any, token);
+      setSessionCookie(res, token);
       logger.info("auth.login.success", { role: "consultant", consultantId: consultant.id });
       return res;
     }
 
-    const client = await prisma.client.findUnique({
-      where: { email: usernameOrEmail },
-    });
-
     if (!client) {
+      if (consultant && !consultant.active) {
+        logger.warn("auth.login.consultant_inactive", { consultantId: consultant.id });
+        return fail("This consultant account is inactive", 403);
+      }
+
+      if (consultant) {
+        logger.warn("auth.login.invalid_consultant_password", {
+          usernameOrEmail: normalizedIdentifier,
+          consultantId: consultant.id,
+        });
+      }
+
       logger.warn("auth.login.invalid_user", { usernameOrEmail });
       return fail("Invalid username/email or password", 401);
     }
@@ -98,11 +110,12 @@ export async function POST(req: Request) {
       clientId: client.id,
       redirectTo: "/client-dashboard",
     });
-    setSessionCookie(res as any, token);
+    setSessionCookie(res, token);
     logger.info("auth.login.success", { role: "client", clientId: client.id });
     return res;
-  } catch (err: any) {
-    logger.error("auth.login.error", { message: err?.message });
-    return fail(err?.message || "Login failed", 500);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Login failed";
+    logger.error("auth.login.error", { message });
+    return fail(message, 500);
   }
 }

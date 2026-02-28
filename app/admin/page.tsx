@@ -1,7 +1,7 @@
 "use client";
 
 import Sidebar from "@/components/Sidebar";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Lead = {
   id: string;
@@ -44,7 +44,7 @@ export default function AdminPage() {
   // Popup
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  async function fetchLeads(currentPage = page) {
+  const fetchLeads = useCallback(async (currentPage = page) => {
     setLoading(true);
 
     const res = await fetch(
@@ -58,11 +58,11 @@ export default function AdminPage() {
     setTotalPages(payload.totalPages || 1);
 
     setLoading(false);
-  }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    fetchLeads(page);
-  }, [page]);
+    void fetchLeads(page);
+  }, [fetchLeads, page]);
 
   const filteredLeads = useMemo(() => {
     let list = [...leads];
@@ -190,7 +190,10 @@ export default function AdminPage() {
                 <select
                   className="rounded-xl border px-4 py-2 text-sm"
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value as any)}
+                  onChange={(e) => {
+                    const nextFilter = e.target.value as "all" | "today" | "week";
+                    setFilter(nextFilter);
+                  }}
                 >
                   <option value="all">All</option>
                   <option value="today">Today</option>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
 type Consultant = {
@@ -57,23 +57,7 @@ export default function AdminSettingsPage() {
     [consultants]
   );
 
-  useEffect(() => {
-    async function init() {
-      const me = await fetch("/api/admin/me", { cache: "no-store" });
-      const meData = await me.json().catch(() => ({}));
-      const loggedIn = meData?.data?.loggedIn ?? meData?.loggedIn ?? false;
-      if (!loggedIn) {
-        window.location.href = "/signin";
-        return;
-      }
-
-      await loadData();
-    }
-
-    init();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const [summaryRes, consultantsRes] = await Promise.all([
       fetch("/api/admin/settings", { cache: "no-store" }),
       fetch("/api/admin/consultants", { cache: "no-store" }),
@@ -91,7 +75,23 @@ export default function AdminSettingsPage() {
     }
 
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      const me = await fetch("/api/admin/me", { cache: "no-store" });
+      const meData = await me.json().catch(() => ({}));
+      const loggedIn = meData?.data?.loggedIn ?? meData?.loggedIn ?? false;
+      if (!loggedIn) {
+        window.location.assign("/signin");
+        return;
+      }
+
+      await loadData();
+    }
+
+    void init();
+  }, [loadData]);
 
   async function createConsultant(e: React.FormEvent) {
     e.preventDefault();
