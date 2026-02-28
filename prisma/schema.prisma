@@ -23,6 +23,7 @@ model Consultant {
   email     String   @unique
   password  String
   active    Boolean  @default(true)
+  pageAccess Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

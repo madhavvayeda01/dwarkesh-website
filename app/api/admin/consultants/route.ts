@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
+import { DEFAULT_ADMIN_PAGE_ACCESS } from "@/lib/admin-config";
+import { toStoredAdminPageAccessMap } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
 
 const createConsultantSchema = z.object({
@@ -21,13 +23,19 @@ export async function GET() {
       name: true,
       email: true,
       active: true,
+      pageAccess: true,
       createdAt: true,
       updatedAt: true,
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return ok("Consultants fetched", { consultants });
+  return ok("Consultants fetched", {
+    consultants: consultants.map((consultant) => ({
+      ...consultant,
+      pageAccess: toStoredAdminPageAccessMap(consultant.pageAccess),
+    })),
+  });
 }
 
 export async function POST(req: Request) {
@@ -65,18 +73,25 @@ export async function POST(req: Request) {
         email: normalizedEmail,
         password,
         active: true,
+        pageAccess: DEFAULT_ADMIN_PAGE_ACCESS,
       },
       select: {
         id: true,
         name: true,
         email: true,
         active: true,
+        pageAccess: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
-    return ok("Consultant created", { consultant }, 201);
+    return ok("Consultant created", {
+      consultant: {
+        ...consultant,
+        pageAccess: toStoredAdminPageAccessMap(consultant.pageAccess),
+      },
+    }, 201);
   } catch (createError: unknown) {
     if (
       createError instanceof Prisma.PrismaClientKnownRequestError &&

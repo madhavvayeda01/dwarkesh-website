@@ -2,33 +2,95 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ADMIN_PAGE_DEFINITIONS,
+  type AdminPageAccessMap,
+  type AdminPageDefinition,
+} from "@/lib/admin-config";
 
 type AdminSession = {
   name: string;
   type: "env_admin" | "consultant";
 };
 
+type AdminMeResponse = {
+  loggedIn?: boolean;
+  admin?: AdminSession;
+  allowedPages?: AdminPageAccessMap;
+};
+
+type GroupKey = "core" | "client" | "hr" | "audit" | "chat";
+
+const GROUP_LABELS: Record<GroupKey, string> = {
+  core: "Core",
+  client: "Client",
+  hr: "HR",
+  audit: "Audit Module",
+  chat: "Communication",
+};
+
+function isGroupActive(pathname: string, group: GroupKey) {
+  if (group === "core") {
+    return pathname === "/admin/module-control" || pathname === "/admin/settings";
+  }
+  if (group === "client") {
+    return pathname === "/admin" || pathname === "/admin/clients";
+  }
+  if (group === "hr") {
+    return (
+      pathname === "/admin/employees" ||
+      pathname === "/admin/holiday-master" ||
+      pathname === "/admin/in-out"
+    );
+  }
+  if (group === "audit") {
+    return (
+      pathname.startsWith("/admin/audit") ||
+      pathname === "/admin/document-allotment" ||
+      pathname === "/admin/training-calendar"
+    );
+  }
+  return pathname === "/admin/client-connect";
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const [openGroup, setOpenGroup] = useState<"client" | "audit" | "hr" | null>(null);
+  const [openGroup, setOpenGroup] = useState<GroupKey | null>(null);
   const [admin, setAdmin] = useState<AdminSession | null>(null);
+  const [allowedPages, setAllowedPages] = useState<AdminPageAccessMap | null>(null);
 
   useEffect(() => {
     async function loadAdmin() {
       const res = await fetch("/api/admin/me", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      const payload = data?.data ?? data;
-      if (payload?.loggedIn && payload?.admin) {
+      const data = (await res.json().catch(() => ({}))) as { data?: AdminMeResponse } & AdminMeResponse;
+      const payload = data.data ?? data;
+      if (payload.loggedIn && payload.admin) {
         setAdmin({
           name: payload.admin.name || "Primary Admin",
           type: payload.admin.type || "env_admin",
         });
+        setAllowedPages(payload.allowedPages || null);
       }
     }
 
-    loadAdmin();
+    void loadAdmin();
   }, []);
+
+  const visiblePages = useMemo(() => {
+    if (!allowedPages) return ADMIN_PAGE_DEFINITIONS;
+    return ADMIN_PAGE_DEFINITIONS.filter((page) => allowedPages[page.key] !== false);
+  }, [allowedPages]);
+
+  const groupedPages = useMemo(() => {
+    return {
+      core: visiblePages.filter((page) => page.group === "core"),
+      client: visiblePages.filter((page) => page.group === "client"),
+      hr: visiblePages.filter((page) => page.group === "hr"),
+      audit: visiblePages.filter((page) => page.group === "audit"),
+      chat: visiblePages.filter((page) => page.group === "chat"),
+    };
+  }, [visiblePages]);
 
   const linkClass = (path: string) =>
     `block rounded-lg px-3 py-2 text-sm font-semibold transition ${
@@ -36,166 +98,55 @@ export default function Sidebar() {
         ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
         : "text-slate-200 hover:bg-white/10 hover:text-white"
     }`;
-  const inAudit = pathname.startsWith("/admin/audit");
-  const inClient = pathname === "/admin" || pathname === "/admin/clients";
-  const inHr = pathname === "/admin/holiday-master" || pathname === "/admin/in-out";
-  const inAuditModuleGroup =
-    inAudit ||
-    pathname === "/admin/document-allotment" ||
-    pathname === "/admin/training-calendar";
+
+  function renderPageLink(page: AdminPageDefinition) {
+    return (
+      <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+        {page.label}
+      </Link>
+    );
+  }
+
+  function renderGroup(group: GroupKey) {
+    const pages = groupedPages[group];
+    if (pages.length === 0) return null;
+
+    return (
+      <div onMouseEnter={() => setOpenGroup(group)} onMouseLeave={() => setOpenGroup(null)}>
+        <button
+          type="button"
+          className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+            isGroupActive(pathname, group)
+              ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+              : "text-slate-200 hover:bg-white/10 hover:text-white"
+          }`}
+        >
+          {GROUP_LABELS[group]}
+        </button>
+        <div className={`mt-1 rounded-lg p-2 ${openGroup === group ? "block" : "hidden"}`}>
+          <div className="flex flex-col gap-2 text-sm">{pages.map(renderPageLink)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <aside className="w-56 min-h-screen border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
       <div className="rounded-xl border border-white/15 bg-white/10 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
         <h2 className="text-base font-extrabold tracking-tight">Admin Panel</h2>
         <p className="mt-0.5 text-[11px] text-slate-300">
-          {admin ? `${admin.type === "consultant" ? "Consultant" : "Primary Admin"}: ${admin.name}` : "Admin access"}
+          {admin
+            ? `${admin.type === "consultant" ? "Consultant" : "Primary Admin"}: ${admin.name}`
+            : "Admin access"}
         </p>
       </div>
 
       <nav className="mt-3 flex flex-col gap-1.5 text-sm font-semibold">
-        <Link href="/admin/module-control" className={linkClass("/admin/module-control")}>
-          Module Control
-        </Link>
-
-        <Link href="/admin/settings" className={linkClass("/admin/settings")}>
-          Settings
-        </Link>
-
-        <div onMouseEnter={() => setOpenGroup("client")} onMouseLeave={() => setOpenGroup(null)}>
-          <button
-            type="button"
-            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-              inClient
-                ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                : "text-slate-200 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            Client
-          </button>
-          <div className={`mt-1 rounded-lg p-2 ${openGroup === "client" ? "block" : "hidden"}`}>
-            <div className="flex flex-col gap-2 text-sm">
-              <Link
-                href="/admin"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Enquiries
-              </Link>
-              <Link
-                href="/admin/clients"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/clients"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Client Onboarding
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div onMouseEnter={() => setOpenGroup("hr")} onMouseLeave={() => setOpenGroup(null)}>
-          <button
-            type="button"
-            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-              inHr
-                ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                : "text-slate-200 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            HR
-          </button>
-          <div className={`mt-1 rounded-lg p-2 ${openGroup === "hr" ? "block" : "hidden"}`}>
-            <div className="flex flex-col gap-2 text-sm">
-              <Link
-                href="/admin/holiday-master"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/holiday-master"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Holiday Master
-              </Link>
-              <Link
-                href="/admin/in-out"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/in-out"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                In-Out Generator
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div onMouseEnter={() => setOpenGroup("audit")} onMouseLeave={() => setOpenGroup(null)}>
-          <button
-            type="button"
-            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-              inAuditModuleGroup
-                ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                : "text-slate-200 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            Audit Module
-          </button>
-          <div className={`mt-1 rounded-lg p-2 ${openGroup === "audit" ? "block" : "hidden"}`}>
-            <div className="flex flex-col gap-2 text-sm">
-              <Link
-                href="/admin/audit/program"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/audit/program"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Add Audit
-              </Link>
-              <Link
-                href="/admin/audit/client"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/audit/client"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Client Audit Log
-              </Link>
-              <Link
-                href="/admin/document-allotment"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/document-allotment"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Document Allotment
-              </Link>
-              <Link
-                href="/admin/training-calendar"
-                className={`block rounded-lg px-3 py-2 ${
-                  pathname === "/admin/training-calendar"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                Training Calendar
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <Link href="/admin/client-connect" className={linkClass("/admin/client-connect")}>
-          DC Connect
-        </Link>
+        {renderGroup("core")}
+        {renderGroup("client")}
+        {renderGroup("hr")}
+        {renderGroup("audit")}
+        {renderGroup("chat")}
       </nav>
     </aside>
   );

@@ -2,12 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import {
+  ADMIN_PAGE_DEFINITIONS,
+  DEFAULT_ADMIN_PAGE_ACCESS,
+  type AdminPageAccessMap,
+} from "@/lib/admin-config";
 
 type Consultant = {
   id: string;
   name: string;
   email: string;
   active: boolean;
+  pageAccess: AdminPageAccessMap;
   createdAt: string;
   updatedAt: string;
 };
@@ -45,12 +51,15 @@ export default function AdminSettingsPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
   });
+  const [accessConsultantId, setAccessConsultantId] = useState<string | null>(null);
+  const [accessDraft, setAccessDraft] = useState<AdminPageAccessMap | null>(null);
 
   const activeConsultants = useMemo(
     () => consultants.filter((consultant) => consultant.active).length,
@@ -154,6 +163,36 @@ export default function AdminSettingsPage() {
     await loadData();
   }
 
+  async function saveConsultantAccess() {
+    if (!accessConsultantId || !accessDraft) return;
+
+    setSavingAccess(true);
+    setStatus("");
+    const res = await fetch(`/api/admin/consultants/${accessConsultantId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageAccess: accessDraft }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setStatus(data?.message || "Failed to update consultant access.");
+      setSavingAccess(false);
+      return;
+    }
+
+    setStatus("Consultant access updated.");
+    setAccessConsultantId(null);
+    setAccessDraft(null);
+    await loadData();
+    setSavingAccess(false);
+  }
+
+  const accessConsultant = useMemo(
+    () => consultants.find((consultant) => consultant.id === accessConsultantId) || null,
+    [consultants, accessConsultantId]
+  );
+
   return (
     <div className="flex min-h-screen bg-slate-100">
       <Sidebar />
@@ -227,8 +266,8 @@ export default function AdminSettingsPage() {
                     Create Admin-Level Consultant
                   </h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Consultants created here can sign in from the normal sign-in page and will have
-                    full admin access.
+                    Consultants created here can sign in from the normal sign-in page. All admin
+                    pages are allowed by default and can then be limited with Manage Access.
                   </p>
 
                   <form onSubmit={createConsultant} className="mt-6 grid gap-4">
@@ -284,7 +323,7 @@ export default function AdminSettingsPage() {
                       <h2 className="mt-2 text-2xl font-black text-blue-950">Consultant Access</h2>
                     </div>
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-900">
-                      Admin-Level
+                      Configurable
                     </span>
                   </div>
 
@@ -323,6 +362,16 @@ export default function AdminSettingsPage() {
 
                           <div className="mt-4 flex flex-wrap gap-3">
                             <button
+                              onClick={() => {
+                                setAccessConsultantId(consultant.id);
+                                setAccessDraft({ ...consultant.pageAccess });
+                                setStatus("");
+                              }}
+                              className="rounded-2xl bg-blue-900 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+                            >
+                              Manage Access
+                            </button>
+                            <button
                               onClick={() => toggleConsultant(consultant.id, !consultant.active)}
                               className={`rounded-2xl px-4 py-2 text-sm font-bold ${
                                 consultant.active
@@ -347,6 +396,83 @@ export default function AdminSettingsPage() {
                 </div>
               </section>
 
+              {accessConsultant && accessDraft && (
+                <section className="mt-8 rounded-3xl bg-white p-6 shadow-md">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                        Manage Access
+                      </p>
+                      <h2 className="mt-2 text-2xl font-black text-blue-950">
+                        {accessConsultant.name}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-600">{accessConsultant.email}</p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Hidden pages disappear from the sidebar and direct URL access is blocked.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccessConsultantId(null);
+                        setAccessDraft(null);
+                      }}
+                      className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {ADMIN_PAGE_DEFINITIONS.map((page) => (
+                      <label
+                        key={page.key}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-900">{page.label}</p>
+                            <p className="mt-1 text-xs text-slate-500">{page.href}</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={accessDraft[page.key]}
+                            onChange={(e) =>
+                              setAccessDraft((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      [page.key]: e.target.checked,
+                                    }
+                                  : prev
+                              )
+                            }
+                          />
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={saveConsultantAccess}
+                      disabled={savingAccess}
+                      className="rounded-2xl bg-[#f7c63d] px-5 py-3 font-bold text-slate-950 hover:bg-[#ffd457] disabled:opacity-50"
+                    >
+                      {savingAccess ? "Saving..." : "Save Access"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccessDraft({ ...DEFAULT_ADMIN_PAGE_ACCESS })}
+                      className="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Allow All
+                    </button>
+                  </div>
+                </section>
+              )}
+
               <section className="mt-8 rounded-3xl bg-white p-6 shadow-md">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
                   Important Notes
@@ -355,7 +481,8 @@ export default function AdminSettingsPage() {
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="font-bold text-slate-900">Admin Access Scope</p>
                     <p className="mt-2 text-sm text-slate-600">
-                      Consultants created here inherit the same panel access as the main admin.
+                      Consultants start with full admin page access, but each page can be turned on
+                      or off individually.
                     </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4">
