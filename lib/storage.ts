@@ -110,6 +110,31 @@ type ListedObject = {
   updated_at?: string;
 };
 
+async function listLocalFilesByPrefix(
+  safePrefix: string
+): Promise<Array<{ name: string; fileUrl: string; updatedAt: string | null }>> {
+  try {
+    const folderPath = path.join(process.cwd(), "public", "uploads", safePrefix);
+    const entries = await fs.readdir(folderPath, { withFileTypes: true });
+    const files = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const stats = await fs.stat(path.join(folderPath, entry.name));
+          return {
+            name: entry.name,
+            fileUrl: `/uploads/${safePrefix}${entry.name}`,
+            updatedAt: stats.mtime.toISOString(),
+          };
+        })
+    );
+    files.sort((a, b) => (a.updatedAt && b.updatedAt ? b.updatedAt.localeCompare(a.updatedAt) : 0));
+    return files;
+  } catch {
+    return [];
+  }
+}
+
 export async function listSupabaseFilesByPrefix(
   prefix: string
 ): Promise<
@@ -119,28 +144,10 @@ export async function listSupabaseFilesByPrefix(
   }
 > {
   const safePrefix = normalizePrefix(toSafeObjectPath(prefix));
+  const localFiles = await listLocalFilesByPrefix(safePrefix);
 
   if (!USE_SUPABASE) {
-    try {
-      const folderPath = path.join(process.cwd(), "public", "uploads", safePrefix);
-      const entries = await fs.readdir(folderPath, { withFileTypes: true });
-      const files = await Promise.all(
-        entries
-          .filter((entry) => entry.isFile())
-          .map(async (entry) => {
-            const stats = await fs.stat(path.join(folderPath, entry.name));
-            return {
-              name: entry.name,
-              fileUrl: `/uploads/${safePrefix}${entry.name}`,
-              updatedAt: stats.mtime.toISOString(),
-            };
-          })
-      );
-      files.sort((a, b) => (a.updatedAt && b.updatedAt ? b.updatedAt.localeCompare(a.updatedAt) : 0));
-      return { ok: true, files };
-    } catch {
-      return { ok: true, files: [] };
-    }
+    return { ok: true, files: localFiles };
   }
 
   const listUrl = `${SUPABASE_URL}/storage/v1/object/list/${SUPABASE_BUCKET}`;
@@ -165,13 +172,28 @@ export async function listSupabaseFilesByPrefix(
   }
 
   const json = (await res.json()) as ListedObject[];
-  const files = json
+  const remoteFiles = json
     .filter((entry) => entry.name && !entry.name.endsWith("/"))
     .map((entry) => ({
       name: entry.name,
       fileUrl: `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${safePrefix}${entry.name}`,
       updatedAt: entry.updated_at || null,
     }));
+
+  const merged = new Map<string, { name: string; fileUrl: string; updatedAt: string | null }>();
+  for (const file of localFiles) {
+    merged.set(file.name, file);
+  }
+  for (const file of remoteFiles) {
+    merged.set(file.name, file);
+  }
+
+  const files = Array.from(merged.values()).sort((a, b) => {
+    if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
+    if (a.updatedAt) return -1;
+    if (b.updatedAt) return 1;
+    return a.name.localeCompare(b.name);
+  });
 
   return { ok: true, files };
 }

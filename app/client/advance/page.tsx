@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import { normalizeEmployeeCode } from "@/lib/employee-code";
 
 type Employee = {
   id: string;
@@ -31,6 +32,8 @@ type AdvanceRow = {
 type AdvanceComputedRow = AdvanceRow & {
   advance: number;
 };
+
+type SavedAdvanceRow = Omit<AdvanceComputedRow, "id">;
 
 type AdvanceColumnKey =
   | "empNo"
@@ -74,8 +77,59 @@ function roundUp(value: number): number {
   return Math.ceil(value);
 }
 
+function buildRowsFromEmployees(employees: Employee[]): AdvanceRow[] {
+  return employees.map((employee) => ({
+    id: employee.id,
+    empNo: employee.empNo || "",
+    name: employee.fullName || "",
+    department: employee.currentDept || "",
+    designation: employee.designation || "",
+    rateOfPay: toNumber(employee.salaryWage, 0),
+    presentDay: 0,
+    accountNo: employee.bankAcNo || "",
+    ifsc: employee.ifscCode || "",
+    bankName: employee.bankName || "",
+  }));
+}
+
+function mergeSavedRows(employees: Employee[], savedRows: SavedAdvanceRow[]): AdvanceRow[] {
+  const savedByCode = new Map(
+    savedRows.map((row) => [normalizeEmployeeCode(row.empNo), row] as const)
+  );
+
+  return employees.map((employee) => {
+    const baseRow = {
+      id: employee.id,
+      empNo: employee.empNo || "",
+      name: employee.fullName || "",
+      department: employee.currentDept || "",
+      designation: employee.designation || "",
+      rateOfPay: toNumber(employee.salaryWage, 0),
+      presentDay: 0,
+      accountNo: employee.bankAcNo || "",
+      ifsc: employee.ifscCode || "",
+      bankName: employee.bankName || "",
+    };
+    const saved = savedByCode.get(normalizeEmployeeCode(baseRow.empNo));
+    if (!saved) return baseRow;
+
+    return {
+      ...baseRow,
+      name: saved.name || baseRow.name,
+      department: saved.department || baseRow.department,
+      designation: saved.designation || baseRow.designation,
+      rateOfPay: Number.isFinite(saved.rateOfPay) ? saved.rateOfPay : baseRow.rateOfPay,
+      presentDay: Number.isFinite(saved.presentDay) ? saved.presentDay : 0,
+      accountNo: saved.accountNo || baseRow.accountNo,
+      ifsc: saved.ifsc || baseRow.ifsc,
+      bankName: saved.bankName || baseRow.bankName,
+    };
+  });
+}
+
 export default function ClientAdvancePage() {
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<AdvanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -112,21 +166,8 @@ export default function ClientAdvancePage() {
       const data = await res.json();
       const payload = data?.data ?? data;
       const employees: Employee[] = payload?.employees || [];
-
-      setRows(
-        employees.map((employee) => ({
-          id: employee.id,
-          empNo: employee.empNo || "",
-          name: employee.fullName || "",
-          department: employee.currentDept || "",
-          designation: employee.designation || "",
-          rateOfPay: toNumber(employee.salaryWage, 0),
-          presentDay: 0,
-          accountNo: employee.bankAcNo || "",
-          ifsc: employee.ifscCode || "",
-          bankName: employee.bankName || "",
-        }))
-      );
+      setEmployees(employees);
+      setRows(buildRowsFromEmployees(employees));
       setLoading(false);
     }
 
@@ -138,6 +179,39 @@ export default function ClientAdvancePage() {
 
     init();
   }, []);
+
+  useEffect(() => {
+    async function loadSavedAdvance() {
+      if (!employees.length || moduleEnabled !== true) return;
+
+      const res = await fetch(
+        `/api/client/advance/records?month=${advanceMonth}&year=${advanceYear}`,
+        { cache: "no-store" }
+      );
+
+      if (!res.ok) {
+        setRows(buildRowsFromEmployees(employees));
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      const payload = data?.data ?? data;
+      const savedRows: SavedAdvanceRow[] = payload?.rows || [];
+
+      if (savedRows.length === 0) {
+        setRows(buildRowsFromEmployees(employees));
+        return;
+      }
+
+      setRows(mergeSavedRows(employees, savedRows));
+      if (!importFile) {
+        const monthLabel = monthOptions[advanceMonth];
+        setStatus(`Loaded saved advance for ${monthLabel} ${advanceYear}.`);
+      }
+    }
+
+    loadSavedAdvance();
+  }, [advanceMonth, advanceYear, employees, moduleEnabled]);
 
   function updatePresentDay(id: string, value: number) {
     const safe = Number.isFinite(value) ? Math.max(0, value) : 0;

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import fs from "node:fs/promises";
+import path from "node:path";
 import * as XLSX from "xlsx";
 import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
@@ -50,6 +52,11 @@ const MONTHS = [
   "December",
 ] as const;
 
+const querySchema = z.object({
+  month: z.coerce.number().int().min(0).max(11).optional(),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
 const HEADERS = [
   "Emp No",
   "Name",
@@ -63,7 +70,27 @@ const HEADERS = [
   "Bank Name",
 ];
 
-export async function GET() {
+async function readFileBytes(fileUrl: string): Promise<Uint8Array> {
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const res = await fetch(fileUrl);
+    if (!res.ok) {
+      throw new Error("Failed to read advance file from storage");
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  const normalized = fileUrl.replace(/^\/+/, "");
+  const absolute = path.join(process.cwd(), "public", normalized);
+  return new Uint8Array(await fs.readFile(absolute));
+}
+
+function toSafeNumber(value: unknown): number {
+  const num = Number(String(value ?? "").replace(/,/g, "").trim());
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return num;
+}
+
+export async function GET(req: Request) {
   const { error, session } = await requireClientModule("payroll");
   if (error || !session) return error;
   if (!session.clientId) return fail("Unauthorized", 401);
@@ -72,6 +99,64 @@ export async function GET() {
   const prefix = `advance-generated/${clientId}/`;
   const listed = await listSupabaseFilesByPrefix(prefix);
   if (!listed.ok) return fail(listed.error, 500);
+
+  const url = new URL(req.url);
+  const parsed = querySchema.safeParse({
+    month: url.searchParams.get("month") ?? undefined,
+    year: url.searchParams.get("year") ?? undefined,
+  });
+  if (!parsed.success) {
+    return fail("Invalid query", 400, parsed.error.flatten());
+  }
+
+  if (parsed.data.month !== undefined && parsed.data.year !== undefined) {
+    const monthLabel = MONTHS[parsed.data.month];
+    const safeMonth = monthLabel.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const pattern = `advance_${safeMonth}_${parsed.data.year}_`;
+    const candidate = listed.files.find((file) => file.name.startsWith(pattern));
+    if (!candidate) {
+      return ok("No advance file for period", {
+        month: parsed.data.month,
+        year: parsed.data.year,
+        fileName: null,
+        rows: [],
+      });
+    }
+
+    try {
+      const bytes = await readFileBytes(candidate.fileUrl);
+      const wb = XLSX.read(bytes, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {
+        defval: "",
+        range: 2,
+      }) as Record<string, unknown>[];
+
+      const parsedRows = rows.map((row) => ({
+        empNo: String(row["Emp No"] ?? "").trim(),
+        name: String(row["Name"] ?? "").trim(),
+        department: String(row["Department"] ?? "").trim(),
+        designation: String(row["Designation"] ?? "").trim(),
+        rateOfPay: toSafeNumber(row["Rate of pay"]),
+        presentDay: toSafeNumber(row["Present day"] ?? row["Present Day"]),
+        advance: toSafeNumber(row["Advance"]),
+        accountNo: String(row["Account No."] ?? "").trim(),
+        ifsc: String(row["IFSC"] ?? "").trim(),
+        bankName: String(row["Bank Name"] ?? "").trim(),
+      }));
+
+      return ok("Advance file loaded", {
+        month: parsed.data.month,
+        year: parsed.data.year,
+        fileName: candidate.name,
+        rows: parsedRows,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to parse advance file";
+      return fail(message, 500);
+    }
+  }
+
   return ok("Advance records fetched", { files: listed.files });
 }
 
@@ -141,4 +226,3 @@ export async function DELETE(req: Request) {
 
   return ok("Advance file deleted", { fileName: parsed.data.fileName });
 }
-

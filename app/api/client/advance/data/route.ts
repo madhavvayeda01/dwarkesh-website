@@ -32,6 +32,17 @@ type AdvanceRow = {
   bankName: string;
 };
 
+type ImportedAdvanceOverrides = {
+  presentDay?: number;
+  rateOfPay?: number;
+  name?: string;
+  department?: string;
+  designation?: string;
+  accountNo?: string;
+  ifsc?: string;
+  bankName?: string;
+};
+
 function toNumber(value: string | null | undefined, fallback = 0): number {
   if (!value) return fallback;
   const normalized = String(value).replace(/,/g, "").trim();
@@ -61,25 +72,26 @@ function buildRows(employees: Array<{
   bankAcNo: string | null;
   ifscCode: string | null;
   bankName: string | null;
-}>, presentDayByCode?: Map<string, number>): AdvanceRow[] {
+}>, importedByCode?: Map<string, ImportedAdvanceOverrides>): AdvanceRow[] {
   return employees.map((employee) => {
     const empNo = employee.empNo || "";
     const normalizedCode = normalizeEmployeeCode(empNo) || "";
-    const presentDay = presentDayByCode?.get(normalizedCode) ?? 0;
-    const rateOfPay = toNumber(employee.salaryWage, 0);
+    const imported = importedByCode?.get(normalizedCode);
+    const presentDay = imported?.presentDay ?? 0;
+    const rateOfPay = imported?.rateOfPay ?? toNumber(employee.salaryWage, 0);
     const advance = roundUp(rateOfPay * presentDay);
     return {
       id: employee.id,
       empNo,
-      name: employee.fullName || "",
-      department: employee.currentDept || "",
-      designation: employee.designation || "",
+      name: imported?.name || employee.fullName || "",
+      department: imported?.department || employee.currentDept || "",
+      designation: imported?.designation || employee.designation || "",
       rateOfPay,
       presentDay,
       advance,
-      accountNo: employee.bankAcNo || "",
-      ifsc: employee.ifscCode || "",
-      bankName: employee.bankName || "",
+      accountNo: imported?.accountNo || employee.bankAcNo || "",
+      ifsc: imported?.ifsc || employee.ifscCode || "",
+      bankName: imported?.bankName || employee.bankName || "",
     };
   });
 }
@@ -170,7 +182,7 @@ export async function POST(req: Request) {
       return fail("Only CSV or XLSX allowed", 400);
     }
 
-    const presentDayByCode = new Map<string, number>();
+    const importedByCode = new Map<string, ImportedAdvanceOverrides>();
     for (const row of rows) {
       const codeCell =
         row["Emp No"] ??
@@ -183,10 +195,31 @@ export async function POST(req: Request) {
         row["Present Day"] ??
         row["presentDay"] ??
         row["Present"];
+      const rateOfPayCell =
+        row["Rate of pay"] ??
+        row["Rate Of Pay"] ??
+        row["rateOfPay"];
 
       const code = normalizeEmployeeCode(codeCell ? String(codeCell) : "");
       if (!code) continue;
-      presentDayByCode.set(code, toSafeNumber(presentDayCell));
+      importedByCode.set(code, {
+        name: String(row["Name"] ?? row["name"] ?? "").trim() || undefined,
+        department:
+          String(row["Department"] ?? row["department"] ?? "").trim() || undefined,
+        designation:
+          String(row["Designation"] ?? row["designation"] ?? "").trim() || undefined,
+        rateOfPay:
+          rateOfPayCell === undefined || rateOfPayCell === null || String(rateOfPayCell).trim() === ""
+            ? undefined
+            : toSafeNumber(rateOfPayCell),
+        presentDay: toSafeNumber(presentDayCell),
+        accountNo:
+          String(row["Account No."] ?? row["Account No"] ?? row["accountNo"] ?? "").trim() ||
+          undefined,
+        ifsc: String(row["IFSC"] ?? row["ifsc"] ?? "").trim() || undefined,
+        bankName:
+          String(row["Bank Name"] ?? row["bankName"] ?? "").trim() || undefined,
+      });
     }
 
     const employees = await prisma.employee.findMany({
@@ -205,7 +238,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const advanceRows = buildRows(employees, presentDayByCode);
+    const advanceRows = buildRows(employees, importedByCode);
     return ok("Advance data imported", { rows: advanceRows });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to import advance data";
