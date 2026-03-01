@@ -270,73 +270,73 @@ export default function ClientDashboardPage() {
           </div>
 
           {status && (
-            <div className="rounded-2xl border border-blue-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700 shadow">
+            <div className="rounded-2xl border border-blue-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700 shadow dark:border-blue-900/60 dark:bg-slate-900 dark:text-slate-100">
               {status}
             </div>
           )}
 
           <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <section className="rounded-[32px] border border-slate-200/70 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+            <section className="rounded-[32px] border border-slate-200/70 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-slate-950/95">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
                     Company Details
                   </p>
-                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                     Client Information
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                  <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
                     Use this section to keep your company profile current for payroll,
                     documents, and other client-facing records.
                   </p>
                 </div>
                 <button
                   onClick={() => setEditing((prev) => !prev)}
-                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-900"
                 >
                   {editing ? "Hide Editor" : "Edit Info"}
                 </button>
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Company Name
                   </p>
-                  <p className="mt-2 text-lg font-bold text-slate-900">{client?.name || "-"}</p>
+                  <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{client?.name || "-"}</p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Contact Number
                   </p>
-                  <p className="mt-2 text-lg font-bold text-slate-900">
+                  <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
                     {client?.contactNumber || "-"}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Email Address
                   </p>
-                  <p className="mt-2 break-all text-lg font-bold text-slate-900">
+                  <p className="mt-2 break-all text-lg font-bold text-slate-900 dark:text-white">
                     {client?.email || "-"}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Address
                   </p>
-                  <p className="mt-2 whitespace-pre-wrap text-base font-semibold text-slate-900">
+                  <p className="mt-2 whitespace-pre-wrap text-base font-semibold text-slate-900 dark:text-white">
                     {client?.address || "-"}
                   </p>
                 </div>
               </div>
 
               {editing && (
-                <div className="mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#faf7f0_0%,#f4f7fb_100%)] p-5">
+                <div className="mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#faf7f0_0%,#f4f7fb_100%)] p-5 dark:border-slate-800 dark:bg-slate-900">
                   <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
                     <div className="space-y-4">
-                      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
-                        <div className="flex h-52 items-center justify-center bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_100%)]">
+                      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+                        <div className="flex h-52 items-center justify-center bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_100%)] dark:bg-slate-900">
                           {form.logoUrl ? (
                             <img
                               src={form.logoUrl}
@@ -350,16 +350,16 @@ export default function ClientDashboardPage() {
                           )}
                         </div>
                         <div className="space-y-3 p-4">
-                          <label className="block text-sm font-semibold text-slate-700">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
                             Upload Logo
                           </label>
                           <input
                             type="file"
                             accept="image/*"
                             onChange={(e) => uploadLogo(e.target.files?.[0] || null)}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                            className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                           />
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
                             PNG, JPG, WEBP up to 5 MB.
                           </p>
                           {uploadingLogo && (
@@ -371,41 +371,41 @@ export default function ClientDashboardPage() {
 
                     <div className="grid gap-4">
                       <label className="grid gap-2">
-                        <span className="text-sm font-semibold text-slate-700">Company Name</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Company Name</span>
                         <input
                           value={form.name}
                           onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         />
                       </label>
 
                       <label className="grid gap-2">
-                        <span className="text-sm font-semibold text-slate-700">Contact Number</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Contact Number</span>
                         <input
                           value={form.contactNumber}
                           onChange={(e) =>
                             setForm((prev) => ({ ...prev, contactNumber: e.target.value }))
                           }
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         />
                       </label>
 
                       <label className="grid gap-2">
-                        <span className="text-sm font-semibold text-slate-700">Logo URL</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Logo URL</span>
                         <input
                           value={form.logoUrl}
                           onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value }))}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         />
                       </label>
 
                       <label className="grid gap-2">
-                        <span className="text-sm font-semibold text-slate-700">Address</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Address</span>
                         <textarea
                           rows={5}
                           value={form.address}
                           onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500"
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         />
                       </label>
 
@@ -428,7 +428,7 @@ export default function ClientDashboardPage() {
                             });
                             setStatus("");
                           }}
-                          className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-white"
+                          className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-white dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
                         >
                           Cancel
                         </button>
@@ -439,14 +439,14 @@ export default function ClientDashboardPage() {
               )}
             </section>
 
-            <section className="rounded-[32px] border border-slate-200/70 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <section className="rounded-[32px] border border-slate-200/70 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-slate-950/95">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
                 Access Snapshot
               </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                 Active Pages
               </h2>
-              <p className="mt-2 text-sm text-slate-600">
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 Quick shortcuts to the client pages currently enabled for this account.
               </p>
 
@@ -455,12 +455,12 @@ export default function ClientDashboardPage() {
                   <a
                     key={page.key}
                     href={page.href}
-                    className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
+                    className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700 dark:hover:bg-slate-800"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-base font-bold text-slate-900">{page.label}</p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        <p className="text-base font-bold text-slate-900 dark:text-white">{page.label}</p>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                           Enabled
                         </p>
                       </div>
@@ -472,7 +472,7 @@ export default function ClientDashboardPage() {
                 ))}
 
                 {enabledPages.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                     No feature pages are enabled for this client account yet.
                   </div>
                 )}
