@@ -286,7 +286,7 @@ export default function ClientPayrollPage() {
       if (!loggedIn) window.location.href = "/signin";
       const accessRes = await fetch("/api/client/modules?page=payroll", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return false;
@@ -909,5 +909,6 @@ export default function ClientPayrollPage() {
     </div>
   );
 }
+
 
 

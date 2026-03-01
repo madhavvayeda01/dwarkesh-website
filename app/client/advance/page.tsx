@@ -151,7 +151,7 @@ export default function ClientAdvancePage() {
       if (!loggedIn) window.location.href = "/signin";
       const accessRes = await fetch("/api/client/modules?page=advance", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return false;
@@ -633,5 +633,6 @@ export default function ClientAdvancePage() {
     </div>
   );
 }
+
 
 

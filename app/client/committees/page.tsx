@@ -24,7 +24,7 @@ export default function ClientCommitteesPage() {
       }
       const accessRes = await fetch("/api/client/modules?page=committees", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         return;
       }
@@ -95,5 +95,6 @@ export default function ClientCommitteesPage() {
     </div>
   );
 }
+
 
 

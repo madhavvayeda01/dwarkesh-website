@@ -488,8 +488,8 @@ export default function ClientEmployeesPage() {
     async function initEmployees() {
       const accessRes = await fetch("/api/client/modules?page=employee_master", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      const enabled = accessData?.data?.enabled ?? false;
-      if (!accessRes.ok || !enabled) {
+      const enabled = accessRes.ok ? accessData?.data?.enabled !== false : true;
+      if (enabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return;
@@ -1860,6 +1860,7 @@ export default function ClientEmployeesPage() {
     </div>
   );
 }
+
 
 
 

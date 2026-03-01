@@ -35,7 +35,7 @@ export default function ClientAdvanceDataPage() {
       }
       const accessRes = await fetch("/api/client/modules?page=advance_data", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return;
@@ -180,6 +180,7 @@ export default function ClientAdvanceDataPage() {
     </div>
   );
 }
+
 
 
 

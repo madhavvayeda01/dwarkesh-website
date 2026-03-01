@@ -44,7 +44,7 @@ export default function ClientPayslipPage() {
 
       const accessRes = await fetch("/api/client/modules?page=payslip", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      setModuleEnabled(!!(accessRes.ok && accessData?.data?.enabled));
+      setModuleEnabled(accessRes.ok ? accessData?.data?.enabled !== false : true);
     }
     init();
   }, []);
@@ -161,6 +161,7 @@ export default function ClientPayslipPage() {
     </div>
   );
 }
+
 
 
 

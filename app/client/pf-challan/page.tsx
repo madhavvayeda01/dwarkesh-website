@@ -35,7 +35,7 @@ export default function ClientPfChallanPage() {
       if (!loggedIn) window.location.href = "/signin";
       const accessRes = await fetch("/api/client/modules?page=pf_challan", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      setModuleEnabled(!!(accessRes.ok && accessData?.data?.enabled));
+      setModuleEnabled(accessRes.ok ? accessData?.data?.enabled !== false : true);
     }
     checkLogin();
   }, []);
@@ -133,5 +133,6 @@ export default function ClientPfChallanPage() {
     </div>
   );
 }
+
 
 

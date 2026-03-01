@@ -32,7 +32,7 @@ export default function ClientDocumentsPage() {
       if (!loggedIn) window.location.href = "/signin";
       const accessRes = await fetch("/api/client/modules?page=personal_documents", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         setLoadingTemplates(false);
         return false;
@@ -228,5 +228,6 @@ export default function ClientDocumentsPage() {
     </div>
   );
 }
+
 
 

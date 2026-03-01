@@ -68,7 +68,7 @@ export default function ClientTrainingPage() {
       }
       const accessRes = await fetch("/api/client/modules?page=training", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         return;
       }
@@ -113,5 +113,6 @@ export default function ClientTrainingPage() {
     </div>
   );
 }
+
 
 

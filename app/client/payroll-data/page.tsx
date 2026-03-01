@@ -35,7 +35,7 @@ export default function ClientPayrollDataPage() {
       }
       const accessRes = await fetch("/api/client/modules?page=payroll_data", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      if (!accessRes.ok || !accessData?.data?.enabled) {
+      if (accessRes.ok && accessData?.data?.enabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return;
@@ -180,5 +180,6 @@ export default function ClientPayrollDataPage() {
     </div>
   );
 }
+
 
 

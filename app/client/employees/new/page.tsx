@@ -85,7 +85,7 @@ export default function AddNewEmployeePage() {
       if (!loggedIn) window.location.href = "/signin";
       const accessRes = await fetch("/api/client/modules?page=add_employee", { cache: "no-store" });
       const accessData = await accessRes.json().catch(() => ({}));
-      setModuleEnabled(!!(accessRes.ok && accessData?.data?.enabled));
+      setModuleEnabled(accessRes.ok ? accessData?.data?.enabled !== false : true);
     }
     checkLogin();
   }, []);
@@ -221,5 +221,6 @@ export default function AddNewEmployeePage() {
     </div>
   );
 }
+
 
 
