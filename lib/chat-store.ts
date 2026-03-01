@@ -1,6 +1,4 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { prisma } from "@/lib/prisma";
 
 export type ChatMessage = {
   id: string;
@@ -10,42 +8,38 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-function chatDir() {
-  return path.join(process.cwd(), "data", "chat");
-}
-
-function chatFile(clientId: string) {
-  return path.join(chatDir(), `${clientId}.json`);
-}
-
-async function ensureDir() {
-  await fs.mkdir(chatDir(), { recursive: true });
+function toChatMessage(message: {
+  id: string;
+  clientId: string;
+  sender: "client" | "admin";
+  text: string;
+  createdAt: Date;
+}): ChatMessage {
+  return {
+    id: message.id,
+    clientId: message.clientId,
+    sender: message.sender,
+    text: message.text,
+    createdAt: message.createdAt.toISOString(),
+  };
 }
 
 export async function listClientIdsWithChat(): Promise<string[]> {
-  await ensureDir();
-  const entries = await fs.readdir(chatDir(), { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-    .map((entry) => entry.name.replace(/\.json$/i, ""));
+  const rows = await prisma.clientChatMessage.findMany({
+    select: { clientId: true },
+    distinct: ["clientId"],
+  });
+
+  return rows.map((row) => row.clientId);
 }
 
 export async function getMessages(clientId: string): Promise<ChatMessage[]> {
-  await ensureDir();
-  const file = chatFile(clientId);
-  try {
-    const raw = await fs.readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as ChatMessage[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+  const messages = await prisma.clientChatMessage.findMany({
+    where: { clientId },
+    orderBy: { createdAt: "asc" },
+  });
 
-async function saveMessages(clientId: string, messages: ChatMessage[]) {
-  await ensureDir();
-  const file = chatFile(clientId);
-  await fs.writeFile(file, JSON.stringify(messages, null, 2), "utf8");
+  return messages.map(toChatMessage);
 }
 
 export async function addMessage(
@@ -58,15 +52,13 @@ export async function addMessage(
     throw new Error("Message text cannot be empty.");
   }
 
-  const messages = await getMessages(clientId);
-  const message: ChatMessage = {
-    id: randomUUID(),
-    clientId,
-    sender,
-    text: trimmed,
-    createdAt: new Date().toISOString(),
-  };
-  messages.push(message);
-  await saveMessages(clientId, messages);
-  return message;
+  const message = await prisma.clientChatMessage.create({
+    data: {
+      clientId,
+      sender,
+      text: trimmed,
+    },
+  });
+
+  return toChatMessage(message);
 }

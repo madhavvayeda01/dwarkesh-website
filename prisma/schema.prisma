@@ -46,6 +46,7 @@ model Client {
   shiftConfig   ClientShiftConfig?
   holidays      ClientHoliday[]
   payrollRecords PayrollRecord[]
+  chatMessages  ClientChatMessage[]
 }
 
 model Employee {
@@ -290,7 +291,23 @@ model PayrollRecord {
   @@index([clientId, year, month, employeeId])
 }
 
+model ClientChatMessage {
+  id        String     @id @default(cuid())
+  clientId  String
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sender    ChatSender
+  text      String
+  createdAt DateTime   @default(now())
+
+  @@index([clientId, createdAt])
+}
+
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
+}
+
+enum ChatSender {
+  client
+  admin
 }
