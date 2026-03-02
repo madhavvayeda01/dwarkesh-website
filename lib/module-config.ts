@@ -2,6 +2,7 @@ export const MODULE_KEYS = [
   "employees",
   "payroll",
   "in_out",
+  "compliance",
   "training",
   "committees",
   "documents",
@@ -18,6 +19,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   employees: "Employees",
   payroll: "Payroll",
   in_out: "In-Out",
+  compliance: "Compliance",
   training: "Training",
   committees: "Committees",
   documents: "Documents",
@@ -30,6 +32,7 @@ export const DEFAULT_MODULE_ACCESS: ModuleAccessMap = {
   employees: true,
   payroll: true,
   in_out: true,
+  compliance: true,
   training: true,
   committees: true,
   documents: true,
@@ -154,6 +157,30 @@ export const CLIENT_PAGE_DEFINITIONS = [
     sectionLabel: "Salary",
   },
   {
+    key: "compliance_legal_docs",
+    label: "Legal Doc",
+    href: "/client/compliance/legal-docs",
+    module: "compliance",
+    navGroup: "compliance",
+    sectionLabel: "Compliance",
+  },
+  {
+    key: "compliance_trainings",
+    label: "Trainings",
+    href: "/client/compliance/trainings",
+    module: "compliance",
+    navGroup: "compliance",
+    sectionLabel: "Compliance",
+  },
+  {
+    key: "compliance_committee_meetings",
+    label: "Committee Meetings",
+    href: "/client/compliance/committee-meetings",
+    module: "compliance",
+    navGroup: "compliance",
+    sectionLabel: "Compliance",
+  },
+  {
     key: "audit_dashboard",
     label: "Audit Dashboard",
     href: "/client/audit",
@@ -204,6 +231,17 @@ export const CLIENT_PAGE_LABELS = Object.fromEntries(
 export const CLIENT_PAGE_BY_KEY = Object.fromEntries(
   CLIENT_PAGE_DEFINITIONS.map((page) => [page.key, page])
 ) as Record<ClientPageKey, ClientPageDefinition>;
+
+export const CLIENT_PAGE_BY_PATH = Object.fromEntries(
+  CLIENT_PAGE_DEFINITIONS.map((page) => [page.href, page])
+) as Record<ClientPageDefinition["href"], ClientPageDefinition>;
+
+export function getClientPageKeyForPath(pathname: string): ClientPageKey | null {
+  const normalized =
+    pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const page = CLIENT_PAGE_BY_PATH[normalized as ClientPageDefinition["href"]];
+  return page?.key ?? null;
+}
 
 export function getFirstAccessibleClientRoute(pages: PageAccessMap) {
   const firstEnabled = CLIENT_PAGE_DEFINITIONS.find((page) => pages[page.key]);

@@ -14,6 +14,7 @@ type ModuleControlRow = {
   employeesEnabled: boolean;
   payrollEnabled: boolean;
   inOutEnabled: boolean;
+  complianceEnabled: boolean;
   trainingEnabled: boolean;
   committeesEnabled: boolean;
   documentsEnabled: boolean;
@@ -32,6 +33,7 @@ export function toModuleAccessMap(row: ModuleControlRow): ModuleAccessMap {
     employees: !!row.employeesEnabled,
     payroll: !!row.payrollEnabled,
     in_out: !!row.inOutEnabled,
+    compliance: !!row.complianceEnabled,
     training: !!row.trainingEnabled,
     committees: !!row.committeesEnabled,
     documents: !!row.documentsEnabled,
@@ -77,6 +79,7 @@ export function toDbUpdatePayload(access: Partial<ModuleAccessMap>) {
   if (typeof access.employees === "boolean") payload.employeesEnabled = access.employees;
   if (typeof access.payroll === "boolean") payload.payrollEnabled = access.payroll;
   if (typeof access.in_out === "boolean") payload.inOutEnabled = access.in_out;
+  if (typeof access.compliance === "boolean") payload.complianceEnabled = access.compliance;
   if (typeof access.training === "boolean") payload.trainingEnabled = access.training;
   if (typeof access.committees === "boolean") payload.committeesEnabled = access.committees;
   if (typeof access.documents === "boolean") payload.documentsEnabled = access.documents;
@@ -134,6 +137,7 @@ export async function getClientPageAccess(clientId: string): Promise<PageAccessM
       employeesEnabled: true,
       payrollEnabled: true,
       inOutEnabled: true,
+      complianceEnabled: true,
       trainingEnabled: true,
       committeesEnabled: true,
       documentsEnabled: true,

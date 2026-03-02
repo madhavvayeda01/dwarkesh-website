@@ -34,6 +34,10 @@ export default function ClientSidebar() {
 
   const inEmployeeData =
     pathname.startsWith("/client/employees") || pathname.startsWith("/client/documents");
+  const inComplianceData =
+    pathname.startsWith("/client/compliance/legal-docs") ||
+    pathname.startsWith("/client/compliance/trainings") ||
+    pathname.startsWith("/client/compliance/committee-meetings");
   const inAuditData =
     pathname.startsWith("/client/audit") ||
     pathname.startsWith("/client/training") ||
@@ -98,6 +102,10 @@ export default function ClientSidebar() {
   );
   const auditPages = useMemo(
     () => visiblePages.filter((page) => page.navGroup === "audit_module"),
+    [visiblePages]
+  );
+  const compliancePages = useMemo(
+    () => visiblePages.filter((page) => page.navGroup === "compliance"),
     [visiblePages]
   );
   const chatPages = useMemo(
@@ -226,6 +234,35 @@ export default function ClientSidebar() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {compliancePages.length > 0 && (
+          <div className="group">
+            <button
+              type="button"
+              className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                inComplianceData
+                  ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+                  : "text-slate-200 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              Compliance
+            </button>
+
+            <div
+              className={`mt-1 rounded-lg p-2 ${
+                inComplianceData
+                  ? "block bg-white/8 ring-1 ring-white/15"
+                  : "hidden bg-white/5 ring-1 ring-white/10 group-hover:block"
+              }`}
+            >
+              {compliancePages.map((page) => (
+                <Link key={page.key} href={page.href} className={linkClass(page.href)}>
+                  {page.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}

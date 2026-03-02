@@ -22,6 +22,7 @@ const updateSchema = z.object({
       employees: z.boolean().optional(),
       payroll: z.boolean().optional(),
       in_out: z.boolean().optional(),
+      compliance: z.boolean().optional(),
       training: z.boolean().optional(),
       committees: z.boolean().optional(),
       documents: z.boolean().optional(),

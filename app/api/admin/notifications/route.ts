@@ -2,6 +2,8 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { getMessages, listClientIdsWithChat } from "@/lib/chat-store";
+import { prisma } from "@/lib/prisma";
+import { syncComplianceDocumentNotifications } from "@/lib/compliance-notifications";
 
 const querySchema = z.object({
   since: z.string().datetime().optional(),
@@ -10,6 +12,8 @@ const querySchema = z.object({
 export async function GET(req: Request) {
   const { error } = await requireAdmin();
   if (error) return error;
+
+  await syncComplianceDocumentNotifications();
 
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({
@@ -37,6 +41,26 @@ export async function GET(req: Request) {
     if (last?.createdAt && (!latestAt || last.createdAt > latestAt)) {
       latestAt = last.createdAt;
     }
+  }
+
+  const legalDocNotifications = await prisma.complianceNotification.findMany({
+    where: {
+      audience: "ADMIN",
+    },
+    select: {
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const unreadLegalDocCount = since
+    ? legalDocNotifications.filter((item) => item.createdAt.toISOString() > since).length
+    : legalDocNotifications.length;
+  unreadCount += unreadLegalDocCount;
+
+  const latestLegalDoc = legalDocNotifications[0]?.createdAt?.toISOString() || null;
+  if (latestLegalDoc && (!latestAt || latestLegalDoc > latestAt)) {
+    latestAt = latestLegalDoc;
   }
 
   return ok("Notifications fetched", {

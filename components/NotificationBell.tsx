@@ -146,9 +146,9 @@ export default function NotificationBell() {
       <div className="invisible absolute right-0 z-50 mt-2 w-64 rounded-xl bg-white p-3 text-sm text-slate-900 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
           <p className="font-bold text-blue-950">Notifications</p>
           {unreadCount > 0 ? (
-            <p className="mt-2">{unreadCount} new message(s)</p>
+            <p className="mt-2">{unreadCount} new notification(s)</p>
           ) : (
-            <p className="mt-2 text-slate-600">No new messages</p>
+            <p className="mt-2 text-slate-600">No new notifications</p>
           )}
           <div className="mt-3 flex gap-2">
             <button
@@ -163,6 +163,12 @@ export default function NotificationBell() {
               className="rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-semibold text-blue-950 hover:bg-yellow-400"
             >
               Open chat
+            </a>
+            <a
+              href={role === "admin" ? "/admin/compliance/legal-docs" : "/client/compliance/legal-docs"}
+              className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-300"
+            >
+              Legal docs
             </a>
           </div>
       </div>

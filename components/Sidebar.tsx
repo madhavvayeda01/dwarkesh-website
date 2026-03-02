@@ -20,12 +20,13 @@ type AdminMeResponse = {
   allowedPages?: AdminPageAccessMap;
 };
 
-type GroupKey = "core" | "client" | "hr" | "ops" | "audit" | "chat";
+type GroupKey = "core" | "client" | "hr" | "compliance" | "ops" | "audit" | "chat";
 
 const GROUP_LABELS: Record<GroupKey, string> = {
   core: "Core",
   client: "Client",
   hr: "HR",
+  compliance: "Compliance",
   ops: "Operations",
   audit: "Audit Module",
   chat: "Communication",
@@ -40,6 +41,9 @@ function isGroupActive(pathname: string, group: GroupKey) {
   }
   if (group === "hr") {
     return pathname === "/admin/document-allotment";
+  }
+  if (group === "compliance") {
+    return pathname.startsWith("/admin/compliance/");
   }
   if (group === "ops") {
     return pathname === "/admin/holiday-master" || pathname === "/admin/in-out";
@@ -83,6 +87,7 @@ export default function Sidebar() {
       core: visiblePages.filter((page) => page.group === "core"),
       client: visiblePages.filter((page) => page.group === "client"),
       hr: visiblePages.filter((page) => page.group === "hr"),
+      compliance: visiblePages.filter((page) => page.group === "compliance"),
       ops: visiblePages.filter((page) => page.group === "ops"),
       audit: visiblePages.filter((page) => page.group === "audit"),
       chat: visiblePages.filter((page) => page.group === "chat"),
@@ -142,6 +147,7 @@ export default function Sidebar() {
         {renderGroup("core")}
         {renderGroup("client")}
         {renderGroup("hr")}
+        {renderGroup("compliance")}
         {renderGroup("ops")}
         {renderGroup("audit")}
         {renderGroup("chat")}

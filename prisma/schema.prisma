@@ -47,6 +47,10 @@ model Client {
   holidays      ClientHoliday[]
   payrollRecords PayrollRecord[]
   chatMessages  ClientChatMessage[]
+  complianceDocuments ComplianceLegalDocument[]
+  complianceScheduleTemplates ComplianceScheduleTemplate[]
+  complianceScheduleEvents ComplianceScheduleEvent[]
+  complianceNotifications ComplianceNotification[]
 }
 
 model Employee {
@@ -213,6 +217,7 @@ model ModuleControl {
   employeesEnabled      Boolean  @default(true)
   payrollEnabled        Boolean  @default(true)
   inOutEnabled          Boolean  @default(true)
+  complianceEnabled     Boolean  @default(true)
   trainingEnabled       Boolean  @default(true)
   committeesEnabled     Boolean  @default(true)
   documentsEnabled      Boolean  @default(true)
@@ -302,6 +307,71 @@ model ClientChatMessage {
   @@index([clientId, createdAt])
 }
 
+model ComplianceLegalDocument {
+  id         String   @id @default(cuid())
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name       String
+  issueDate  DateTime?
+  expiryDate DateTime
+  remarks    String?
+  fileUrl    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  notifications ComplianceNotification[]
+
+  @@index([clientId, expiryDate])
+}
+
+model ComplianceScheduleTemplate {
+  id        String                     @id @default(cuid())
+  clientId  String
+  client    Client                     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category  ComplianceScheduleCategory
+  title     String
+  fileUrl   String
+  createdAt DateTime                   @default(now())
+
+  scheduleEvents ComplianceScheduleEvent[]
+
+  @@index([clientId, category])
+}
+
+model ComplianceScheduleEvent {
+  id               String                     @id @default(cuid())
+  clientId         String
+  client           Client                     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category         ComplianceScheduleCategory
+  title            String
+  scheduledFor     DateTime
+  templateId       String?
+  template         ComplianceScheduleTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  generatedFileUrl String?
+  generatedFilePath String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([clientId, category, scheduledFor])
+}
+
+model ComplianceNotification {
+  id         String                        @id @default(cuid())
+  clientId   String
+  client     Client                        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  documentId String
+  document   ComplianceLegalDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  audience   ComplianceNotificationAudience
+  kind       ComplianceNotificationKind
+  notifyAt   DateTime
+  title      String
+  message    String
+  createdAt  DateTime                      @default(now())
+
+  @@unique([documentId, audience, kind])
+  @@index([clientId, audience, createdAt])
+}
+
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
@@ -310,4 +380,21 @@ enum EmployeeStatus {
 enum ChatSender {
   client
   admin
+}
+
+enum ComplianceScheduleCategory {
+  TRAINING
+  COMMITTEE
+}
+
+enum ComplianceNotificationAudience {
+  ADMIN
+  CLIENT
+}
+
+enum ComplianceNotificationKind {
+  EXPIRY_30_DAYS
+  EXPIRY_7_DAYS
+  EXPIRY_1_DAY
+  EXPIRED
 }
