@@ -4,6 +4,8 @@ import { normalizeEmployeeCodeOrNull } from "@/lib/employee-code";
 type InputBody = Record<string, unknown>;
 const EMPLOYMENT_STATUS_VALUES = ["ACTIVE", "INACTIVE"] as const;
 type EmploymentStatusValue = (typeof EMPLOYMENT_STATUS_VALUES)[number];
+const EMPLOYEE_FILE_STATUS_VALUES = ["PENDING", "CREATED"] as const;
+type EmployeeFileStatusValue = (typeof EMPLOYEE_FILE_STATUS_VALUES)[number];
 
 function readString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -46,6 +48,17 @@ export function normalizeEmploymentStatus(
     : fallback;
 }
 
+export function normalizeEmployeeFileStatus(
+  value: unknown,
+  fallback: EmployeeFileStatusValue = "PENDING"
+): EmployeeFileStatusValue {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toUpperCase();
+  return EMPLOYEE_FILE_STATUS_VALUES.includes(normalized as EmployeeFileStatusValue)
+    ? (normalized as EmployeeFileStatusValue)
+    : fallback;
+}
+
 export function buildEmployeeCreateData(
   body: InputBody,
   clientId: string
@@ -69,6 +82,7 @@ export function buildEmployeeCreateData(
     fatherSpouseName: pick(body, "fatherSpouseName"),
     fullName,
     employmentStatus: normalizeEmploymentStatus(body.employmentStatus),
+    employeeFileStatus: normalizeEmployeeFileStatus(body.employeeFileStatus),
 
     designation: pick(body, "designation"),
     currentDept: pick(body, "currentDept"),
@@ -149,6 +163,13 @@ export function buildEmployeeUpdateData(
       : rawEmploymentStatus === null
         ? "ACTIVE"
         : normalizeEmploymentStatus(rawEmploymentStatus);
+  const rawEmployeeFileStatus = body.employeeFileStatus;
+  const employeeFileStatus =
+    rawEmployeeFileStatus === undefined
+      ? undefined
+      : rawEmployeeFileStatus === null
+        ? "PENDING"
+        : normalizeEmployeeFileStatus(rawEmployeeFileStatus);
 
   return {
     empNo,
@@ -162,6 +183,7 @@ export function buildEmployeeUpdateData(
     fatherSpouseName: pickForUpdate(body, "fatherSpouseName"),
     fullName,
     employmentStatus,
+    employeeFileStatus,
 
     designation: pickForUpdate(body, "designation"),
     currentDept: pickForUpdate(body, "currentDept"),

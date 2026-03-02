@@ -6,13 +6,14 @@ import ClientSidebar from "@/components/ClientSidebar";
 type LegalDoc = {
   id: string;
   name: string;
+  documentStatus: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
   issueDate: string | null;
-  expiryDate: string;
+  expiryDate: string | null;
   remarks: string | null;
   status: {
     label: string;
-    tone: "active" | "warning" | "expired";
-    days: number;
+    tone: "active" | "warning" | "expired" | "neutral";
+    days: number | null;
   };
 };
 
@@ -30,7 +31,12 @@ function formatDate(value: string | null) {
 function toneClass(tone: LegalDoc["status"]["tone"]) {
   if (tone === "expired") return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200";
   if (tone === "warning") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200";
+  if (tone === "neutral") return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100";
   return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200";
+}
+
+function formatDocumentStatus(value: LegalDoc["documentStatus"]) {
+  return value.replace(/_/g, " ");
 }
 
 export default function ClientComplianceLegalDocsPage() {
@@ -120,15 +126,16 @@ export default function ClientComplianceLegalDocsPage() {
                   <thead className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     <tr>
                       <th className="px-4 py-3">Document</th>
+                      <th className="px-4 py-3">Doc Status</th>
                       <th className="px-4 py-3">Issue Date</th>
                       <th className="px-4 py-3">Expiry Date</th>
-                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Renewal</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                     {docs.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-5 text-slate-500 dark:text-slate-400">No legal documents are registered yet.</td>
+                        <td colSpan={5} className="px-4 py-5 text-slate-500 dark:text-slate-400">No legal documents are registered yet.</td>
                       </tr>
                     ) : (
                       docs.map((doc) => (
@@ -137,6 +144,7 @@ export default function ClientComplianceLegalDocsPage() {
                             <p className="font-semibold text-slate-900 dark:text-white">{doc.name}</p>
                             {doc.remarks ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{doc.remarks}</p> : null}
                           </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDocumentStatus(doc.documentStatus)}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.issueDate)}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.expiryDate)}</td>
                           <td className="px-4 py-3">

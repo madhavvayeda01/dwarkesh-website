@@ -26,6 +26,7 @@ export async function GET(req: Request) {
 
   const rows = documents.map((document) => ({
     "Document Name": document.name,
+    "Document Status": document.documentStatus,
     "Issue Date": formatDateForInput(document.issueDate),
     "Expiry Date": formatDateForInput(document.expiryDate),
     Remarks: document.remarks || "",

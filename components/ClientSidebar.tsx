@@ -137,7 +137,7 @@ export default function ClientSidebar() {
     }`;
 
   return (
-    <aside className="w-56 shrink-0 border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
+    <aside className="sticky top-[var(--app-header-height)] z-20 h-[calc(100vh-var(--app-header-height))] w-56 shrink-0 self-start overflow-y-auto border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
       <div className="rounded-xl border border-white/15 bg-white/10 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur">
         <h2 className="text-base font-extrabold tracking-tight">Client Panel</h2>
         <p className="mt-0.5 text-[11px] text-slate-300">Dwarkesh Consultancy</p>

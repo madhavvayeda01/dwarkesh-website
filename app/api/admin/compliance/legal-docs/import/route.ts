@@ -3,7 +3,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
-import { normalizeOptionalString, parseDateInput } from "@/lib/compliance-legal-docs";
+import {
+  normalizeComplianceDocumentStatus,
+  normalizeOptionalString,
+  parseDateInput,
+} from "@/lib/compliance-legal-docs";
 
 const importSchema = z.object({
   clientId: z.string().trim().min(1),
@@ -11,6 +15,7 @@ const importSchema = z.object({
 
 type ImportRow = {
   "Document Name"?: unknown;
+  "Document Status"?: unknown;
   "Issue Date"?: unknown;
   "Expiry Date"?: unknown;
   Remarks?: unknown;
@@ -44,21 +49,23 @@ export async function POST(req: Request) {
     const documents = rows
       .map((row) => {
         const name = String(row["Document Name"] || "").trim();
+        const documentStatus = normalizeComplianceDocumentStatus(row["Document Status"]);
         const expiryDate = parseDateInput(row["Expiry Date"]);
-        if (!name || !expiryDate) return null;
+        if (!name || (documentStatus === "ACTIVE" && !expiryDate)) return null;
 
         return {
           clientId: parsed.data.clientId,
           name,
+          documentStatus,
           issueDate: parseDateInput(row["Issue Date"]),
-          expiryDate,
+          expiryDate: documentStatus === "ACTIVE" ? expiryDate : null,
           remarks: normalizeOptionalString(row.Remarks),
         };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
     if (documents.length === 0) {
-      return fail("No valid legal document rows found. Required columns: Document Name, Expiry Date", 400);
+      return fail("No valid legal document rows found. Required columns: Document Name and, for ACTIVE rows, Expiry Date", 400);
     }
 
     const created = await prisma.$transaction(

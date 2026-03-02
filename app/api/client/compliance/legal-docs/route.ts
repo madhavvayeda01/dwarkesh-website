@@ -1,9 +1,25 @@
 import { ok } from "@/lib/api-response";
 import { requireClientPage } from "@/lib/auth-guards";
+import type { ComplianceDocumentStatusValue } from "@/lib/compliance-legal-docs";
 import { prisma } from "@/lib/prisma";
 import { syncComplianceDocumentNotifications } from "@/lib/compliance-notifications";
 
-function toStatus(expiryDate: Date) {
+function toStatus(
+  documentStatus: ComplianceDocumentStatusValue,
+  expiryDate: Date | null
+) {
+  if (documentStatus === "NOT_APPLICABLE") {
+    return { label: "Not Applicable", tone: "neutral", days: null };
+  }
+
+  if (documentStatus === "NOT_AVAILABLE") {
+    return { label: "Not Available", tone: "neutral", days: null };
+  }
+
+  if (!expiryDate) {
+    return { label: "Not Available", tone: "neutral", days: null };
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(expiryDate);
@@ -30,7 +46,7 @@ export async function GET() {
   return ok("Compliance legal docs fetched", {
     documents: documents.map((doc) => ({
       ...doc,
-      status: toStatus(doc.expiryDate),
+      status: toStatus(doc.documentStatus, doc.expiryDate),
     })),
   });
 }

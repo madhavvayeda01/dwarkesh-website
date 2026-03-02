@@ -5,7 +5,13 @@ import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 
 const bulkSchema = z.object({
-  action: z.enum(["delete", "set_active", "set_inactive"]),
+  action: z.enum([
+    "delete",
+    "set_active",
+    "set_inactive",
+    "set_file_created",
+    "set_file_pending",
+  ]),
   employeeIds: z.array(z.string().trim().min(1)).min(1),
 });
 
@@ -46,7 +52,10 @@ export async function POST(req: Request) {
         },
       });
       affected = result.count;
-    } else {
+    } else if (
+      parsed.data.action === "set_active" ||
+      parsed.data.action === "set_inactive"
+    ) {
       const employmentStatus = parsed.data.action === "set_active" ? "ACTIVE" : "INACTIVE";
       const result = await prisma.employee.updateMany({
         where: {
@@ -54,6 +63,17 @@ export async function POST(req: Request) {
           id: { in: ownedIds },
         },
         data: { employmentStatus },
+      });
+      affected = result.count;
+    } else {
+      const employeeFileStatus =
+        parsed.data.action === "set_file_created" ? "CREATED" : "PENDING";
+      const result = await prisma.employee.updateMany({
+        where: {
+          clientId,
+          id: { in: ownedIds },
+        },
+        data: { employeeFileStatus },
       });
       affected = result.count;
     }

@@ -23,6 +23,7 @@ const fields: FieldConfig[] = [
   { key: "fatherSpouseName", label: "Father/Spouse Name" },
   { key: "fullName", label: "Full Name" },
   { key: "employmentStatus", label: "Status", type: "select", options: ["ACTIVE", "INACTIVE"] },
+  { key: "employeeFileStatus", label: "Employee File", type: "select", options: ["PENDING", "CREATED"] },
   { key: "designation", label: "Designation" },
   { key: "currentDept", label: "Current Dept." },
   { key: "salaryWage", label: "Salary/Wage" },
@@ -68,7 +69,14 @@ const fields: FieldConfig[] = [
 ];
 
 const emptyForm = Object.fromEntries(
-  fields.map((field) => [field.key, field.key === "employmentStatus" ? "ACTIVE" : ""])
+  fields.map((field) => [
+    field.key,
+    field.key === "employmentStatus"
+      ? "ACTIVE"
+      : field.key === "employeeFileStatus"
+        ? "PENDING"
+        : "",
+  ])
 ) as Record<string, string>;
 
 export default function AddNewEmployeePage() {

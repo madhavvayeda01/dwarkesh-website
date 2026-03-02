@@ -1,5 +1,14 @@
 const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
 
+export const COMPLIANCE_DOCUMENT_STATUS_VALUES = [
+  "ACTIVE",
+  "NOT_APPLICABLE",
+  "NOT_AVAILABLE",
+] as const;
+
+export type ComplianceDocumentStatusValue =
+  (typeof COMPLIANCE_DOCUMENT_STATUS_VALUES)[number];
+
 export function parseDateInput(value: unknown): Date | null {
   if (value === null || value === undefined || value === "") return null;
 
@@ -48,4 +57,17 @@ export function formatDateForDisplay(value: Date | null | undefined) {
 export function normalizeOptionalString(value: unknown) {
   const text = String(value ?? "").trim();
   return text || null;
+}
+
+export function normalizeComplianceDocumentStatus(
+  value: unknown,
+  fallback: ComplianceDocumentStatusValue = "ACTIVE"
+): ComplianceDocumentStatusValue {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toUpperCase().replace(/\s+/g, "_");
+  return COMPLIANCE_DOCUMENT_STATUS_VALUES.includes(
+    normalized as ComplianceDocumentStatusValue
+  )
+    ? (normalized as ComplianceDocumentStatusValue)
+    : fallback;
 }

@@ -9,6 +9,7 @@ import { normalizeStoredDateMaybe } from "@/lib/excel-date";
 const createEmployeeSchema = z.object({
   fullName: z.string().trim().min(1),
   employmentStatus: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  employeeFileStatus: z.enum(["PENDING", "CREATED"]).optional(),
   empNo: z.string().trim().optional(),
   fileNo: z.string().trim().optional(),
   pfNo: z.string().trim().optional(),

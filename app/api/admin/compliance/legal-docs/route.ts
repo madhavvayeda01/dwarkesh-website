@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import {
+  COMPLIANCE_DOCUMENT_STATUS_VALUES,
   formatDateForInput,
+  normalizeComplianceDocumentStatus,
   normalizeOptionalString,
   parseDateInput,
 } from "@/lib/compliance-legal-docs";
@@ -15,16 +17,18 @@ const querySchema = z.object({
 const createSchema = z.object({
   clientId: z.string().trim().min(1),
   name: z.string().trim().min(1),
+  documentStatus: z.enum(COMPLIANCE_DOCUMENT_STATUS_VALUES).optional(),
   issueDate: z.string().trim().optional().or(z.literal("")),
-  expiryDate: z.string().trim().min(1),
+  expiryDate: z.string().trim().optional().or(z.literal("")),
   remarks: z.string().trim().optional().or(z.literal("")),
 });
 
 function toDocumentPayload(document: {
   id: string;
   name: string;
+  documentStatus: string;
   issueDate: Date | null;
-  expiryDate: Date;
+  expiryDate: Date | null;
   remarks: string | null;
   fileUrl: string | null;
   createdAt: Date;
@@ -33,6 +37,7 @@ function toDocumentPayload(document: {
   return {
     id: document.id,
     name: document.name,
+    documentStatus: document.documentStatus,
     issueDate: formatDateForInput(document.issueDate),
     expiryDate: formatDateForInput(document.expiryDate),
     remarks: document.remarks || "",
@@ -69,9 +74,11 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return fail("Invalid legal doc payload", 400, parsed.error.flatten());
 
+  const documentStatus = normalizeComplianceDocumentStatus(parsed.data.documentStatus);
   const issueDate = parseDateInput(parsed.data.issueDate);
   const expiryDate = parseDateInput(parsed.data.expiryDate);
-  if (!expiryDate) {
+  const nextExpiryDate = documentStatus === "ACTIVE" ? expiryDate : null;
+  if (documentStatus === "ACTIVE" && !expiryDate) {
     return fail("Expiry date is required", 400);
   }
 
@@ -79,8 +86,9 @@ export async function POST(req: Request) {
     data: {
       clientId: parsed.data.clientId,
       name: parsed.data.name,
+      documentStatus,
       issueDate,
-      expiryDate,
+      expiryDate: nextExpiryDate as any,
       remarks: normalizeOptionalString(parsed.data.remarks),
     },
   });

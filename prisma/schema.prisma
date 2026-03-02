@@ -72,6 +72,7 @@ model Employee {
   fatherSpouseName   String?
   fullName           String?
   employmentStatus   EmployeeStatus @default(ACTIVE)
+  employeeFileStatus EmployeeFileStatus @default(PENDING)
 
   designation  String?
   currentDept  String?
@@ -312,8 +313,9 @@ model ComplianceLegalDocument {
   clientId   String
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name       String
+  documentStatus ComplianceDocumentStatus @default(ACTIVE)
   issueDate  DateTime?
-  expiryDate DateTime
+  expiryDate DateTime?
   remarks    String?
   fileUrl    String?
   createdAt  DateTime @default(now())
@@ -377,6 +379,11 @@ enum EmployeeStatus {
   INACTIVE
 }
 
+enum EmployeeFileStatus {
+  PENDING
+  CREATED
+}
+
 enum ChatSender {
   client
   admin
@@ -397,4 +404,10 @@ enum ComplianceNotificationKind {
   EXPIRY_7_DAYS
   EXPIRY_1_DAY
   EXPIRED
+}
+
+enum ComplianceDocumentStatus {
+  ACTIVE
+  NOT_APPLICABLE
+  NOT_AVAILABLE
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
 
 type Employee = {
@@ -17,6 +17,7 @@ type Employee = {
   fatherSpouseName: string | null;
   fullName: string | null;
   employmentStatus: "ACTIVE" | "INACTIVE";
+  employeeFileStatus: "PENDING" | "CREATED";
 
   designation: string | null;
   currentDept: string | null;
@@ -89,6 +90,7 @@ const EMPLOYEE_COLUMNS: EmployeeColumn[] = [
   { key: "fatherSpouseName", label: "Father/Spouse" },
   { key: "fullName", label: "Full Name" },
   { key: "employmentStatus", label: "Status" },
+  { key: "employeeFileStatus", label: "Employee File" },
   { key: "designation", label: "Designation" },
   { key: "currentDept", label: "Dept" },
   { key: "salaryWage", label: "Salary/Wage" },
@@ -136,6 +138,7 @@ const EMPLOYEE_COLUMNS: EmployeeColumn[] = [
 const CATEGORICAL_FILTER_FIELDS: FilterableEmployeeField[] = [
   "currentDept",
   "employmentStatus",
+  "employeeFileStatus",
   "designation",
   "gender",
   "maritalStatus",
@@ -155,6 +158,7 @@ const INITIAL_CATEGORICAL_FILTERS: Record<FilterableEmployeeField, string> = {
   fatherSpouseName: "ALL",
   fullName: "ALL",
   employmentStatus: "ALL",
+  employeeFileStatus: "ALL",
   designation: "ALL",
   currentDept: "ALL",
   salaryWage: "ALL",
@@ -219,6 +223,7 @@ const DEFAULT_CRITICAL_FIELDS: Record<FilterableEmployeeField, boolean> = {
   fatherSpouseName: false,
   fullName: true,
   employmentStatus: false,
+  employeeFileStatus: false,
   designation: true,
   currentDept: true,
   salaryWage: false,
@@ -324,8 +329,19 @@ type DateLogicItem = {
   issue: string;
 };
 
+type BulkEmployeeAction =
+  | "delete"
+  | "set_active"
+  | "set_inactive"
+  | "set_file_created"
+  | "set_file_pending";
+
 function toCompactText(value: string | null): string {
   return (value || "").trim();
+}
+
+function formatStatusText(value: string): string {
+  return value.replace(/_/g, " ");
 }
 
 function normalizeAlphaNumeric(value: string | null): string {
@@ -410,15 +426,23 @@ function parseLooseDate(value: string | null): Date | null {
   return null;
 }
 
+async function readJsonSafe(res: Response) {
+  const text = await res.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 export default function ClientEmployeesPage() {
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const topScrollbarRef = useRef<HTMLDivElement | null>(null);
-  const scrollSyncLockRef = useRef(false);
   // 🔐 Client login check
   useEffect(() => {
     async function checkLogin() {
-      const res = await fetch("/api/client/me");
-      const data = await res.json();
+      const res = await fetch("/api/client/me", { cache: "no-store" });
+      const data = await readJsonSafe(res);
       const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
       if (!loggedIn) window.location.href = "/signin";
     }
@@ -444,11 +468,6 @@ export default function ClientEmployeesPage() {
   const [checkerOpen, setCheckerOpen] = useState(false);
   const [gapMode, setGapMode] = useState<GapMode>("full");
   const [criticalFields, setCriticalFields] = useState(DEFAULT_CRITICAL_FIELDS);
-  const [scrollbarMetrics, setScrollbarMetrics] = useState({
-    clientWidth: 0,
-    scrollWidth: 0,
-  });
-
   function formatUanNo(value: string | null): string {
     if (!value) return "-";
     const compact = value.trim().replace(/[\s,]/g, "");
@@ -481,19 +500,9 @@ export default function ClientEmployeesPage() {
   async function fetchEmployees() {
     setLoading(true);
     const res = await fetch("/api/client/employees", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = data?.message || "Failed to load employees.";
-      setMsg(message);
-      setEmployees([]);
-      setLoading(false);
-      if (res.status === 401) {
-        window.location.href = "/signin";
-      }
-      return;
-    }
+    const data = await readJsonSafe(res);
     const payload = data?.data ?? data;
-    const nextEmployees = normalizeHashOnlyValues(payload?.employees || []);
+    const nextEmployees = normalizeHashOnlyValues(payload.employees || []);
     setEmployees(nextEmployees);
     setSelectedEmployeeIds((prev) =>
       prev.filter((id) => nextEmployees.some((employee) => employee.id === id))
@@ -601,6 +610,30 @@ export default function ClientEmployeesPage() {
     await fetchEmployees();
   }
 
+  async function handleToggleEmployeeFileStatus(employee: Employee) {
+    const nextStatus =
+      employee.employeeFileStatus === "CREATED" ? "PENDING" : "CREATED";
+    const confirmed = confirm(
+      `Set employee file for ${employee.fullName || employee.empNo || "this employee"} to ${formatStatusText(nextStatus)}?`
+    );
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/client/employees/${employee.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeFileStatus: nextStatus }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setMsg(data?.message || "Failed to update employee file status");
+      return;
+    }
+
+    setMsg(`Employee file marked ${formatStatusText(nextStatus)}`);
+    await fetchEmployees();
+  }
+
   function toggleEmployeeSelection(employeeId: string) {
     setSelectedEmployeeIds((prev) =>
       prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId]
@@ -699,6 +732,40 @@ export default function ClientEmployeesPage() {
     return employee[field] || "-";
   }
 
+  function renderStatusBadge(
+    value: Employee["employmentStatus"] | Employee["employeeFileStatus"]
+  ) {
+    if (value === "ACTIVE") {
+      return (
+        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">
+          ACTIVE
+        </span>
+      );
+    }
+
+    if (value === "INACTIVE") {
+      return (
+        <span className="inline-flex rounded-full bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700">
+          INACTIVE
+        </span>
+      );
+    }
+
+    if (value === "CREATED") {
+      return (
+        <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-700">
+          CREATED
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-700">
+        PENDING
+      </span>
+    );
+  }
+
   function getFilterComparableValue(employee: Employee, field: FilterableEmployeeField): string {
     const displayed = getDisplayValue(employee, field);
     return displayed === "-" ? "" : displayed.toLowerCase();
@@ -771,68 +838,6 @@ export default function ClientEmployeesPage() {
     () => new Set(selectedEmployeeIds),
     [selectedEmployeeIds]
   );
-  const syncScrollbarMetrics = useCallback(() => {
-    const element = tableScrollRef.current;
-    if (!element) return;
-
-    setScrollbarMetrics({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-    });
-  }, []);
-
-  const syncScrollPosition = useCallback((source: "table" | "top") => {
-    if (scrollSyncLockRef.current) return;
-
-    const tableElement = tableScrollRef.current;
-    const topElement = topScrollbarRef.current;
-    if (!tableElement || !topElement) return;
-
-    scrollSyncLockRef.current = true;
-    if (source === "table") {
-      topElement.scrollLeft = tableElement.scrollLeft;
-    } else {
-      tableElement.scrollLeft = topElement.scrollLeft;
-    }
-
-    window.requestAnimationFrame(() => {
-      scrollSyncLockRef.current = false;
-    });
-  }, []);
-
-  useEffect(() => {
-    syncScrollbarMetrics();
-
-    const element = tableScrollRef.current;
-    if (!element) {
-      return;
-    }
-
-    const handleResize = () => syncScrollbarMetrics();
-    window.addEventListener("resize", handleResize);
-
-    if (typeof ResizeObserver === "undefined") {
-      return () => {
-        window.removeEventListener("resize", handleResize);
-      };
-    }
-
-    const observer = new ResizeObserver(() => {
-      syncScrollbarMetrics();
-    });
-
-    observer.observe(element);
-    const table = element.querySelector("table");
-    if (table instanceof HTMLElement) {
-      observer.observe(table);
-    }
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [syncScrollbarMetrics, filteredEmployees.length, loading]);
-
   const allVisibleSelected =
     filteredEmployeeIds.length > 0 &&
     filteredEmployeeIds.every((employeeId) => selectedEmployeeIdSet.has(employeeId));
@@ -849,7 +854,7 @@ export default function ClientEmployeesPage() {
     });
   }
 
-  async function handleBulkAction(action: "delete" | "set_active" | "set_inactive") {
+  async function handleBulkAction(action: BulkEmployeeAction) {
     if (selectedEmployeeIds.length === 0) {
       setMsg("Select at least one employee first");
       return;
@@ -860,7 +865,11 @@ export default function ClientEmployeesPage() {
         ? "delete"
         : action === "set_active"
           ? "set active"
-          : "set inactive";
+          : action === "set_inactive"
+            ? "set inactive"
+            : action === "set_file_created"
+              ? "mark employee file created"
+              : "mark employee file pending";
     const confirmed = confirm(
       `Apply "${actionLabel}" to ${selectedEmployeeIds.length} selected employees?`
     );
@@ -1199,7 +1208,7 @@ export default function ClientEmployeesPage() {
     <div className="flex min-h-screen overflow-x-hidden bg-slate-100">
       <ClientSidebar />
 
-      <main className="flex-1 min-w-0 overflow-x-hidden p-8">
+      <main className="flex-1 min-w-0 overflow-x-hidden p-6 md:p-8">
         {moduleEnabled === false ? (
           <div className="rounded-2xl bg-white p-6 shadow">
             <h2 className="text-xl font-bold text-blue-950">Page Disabled</h2>
@@ -1267,7 +1276,7 @@ export default function ClientEmployeesPage() {
         </div>
 
         {/* TABLE VIEW */}
-        <div className="mt-10 rounded-3xl bg-white p-6 shadow-md">
+        <div className="mt-10 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-blue-950">
               All Employees ({filteredEmployees.length}
@@ -1317,6 +1326,21 @@ export default function ClientEmployeesPage() {
                 {categoricalOptions.employmentStatus.map((option) => (
                   <option key={option} value={option}>
                     {option}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={categoricalFilters.employeeFileStatus}
+                onChange={(e) =>
+                  setCategoricalFilters((prev) => ({ ...prev, employeeFileStatus: e.target.value }))
+                }
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+              >
+                <option value="ALL">Employee File: All</option>
+                {categoricalOptions.employeeFileStatus.map((option) => (
+                  <option key={option} value={option}>
+                    {formatStatusText(option)}
                   </option>
                 ))}
               </select>
@@ -1445,6 +1469,20 @@ export default function ClientEmployeesPage() {
               Set Inactive
             </button>
             <button
+              onClick={() => handleBulkAction("set_file_created")}
+              disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              File Created
+            </button>
+            <button
+              onClick={() => handleBulkAction("set_file_pending")}
+              disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
+              className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              File Pending
+            </button>
+            <button
               onClick={() => handleBulkAction("delete")}
               disabled={selectedEmployeeIds.length === 0 || bulkActionLoading}
               className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1463,30 +1501,15 @@ export default function ClientEmployeesPage() {
               No employees found. Import an Excel/CSV to see data here.
             </p>
           ) : (
-            <>
-              {scrollbarMetrics.scrollWidth > scrollbarMetrics.clientWidth && (
-                <div className="sticky top-[calc(var(--app-header-height)+1rem)] z-20 mt-6 rounded-t-2xl border border-slate-200 border-b-0 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
-                  <div
-                    ref={topScrollbarRef}
-                    onScroll={() => syncScrollPosition("top")}
-                    className="overflow-x-auto overflow-y-hidden"
-                  >
-                    <div
-                      style={{ width: `${scrollbarMetrics.scrollWidth}px`, height: "1px" }}
-                    />
-                  </div>
-                </div>
-              )}
-              <div
-                ref={tableScrollRef}
-                onScroll={() => syncScrollPosition("table")}
-                className={`relative max-w-full overflow-x-auto border bg-white ${
-                  scrollbarMetrics.scrollWidth > scrollbarMetrics.clientWidth
-                    ? "rounded-b-2xl border-t-0"
-                    : "mt-6 rounded-2xl"
-                }`}
-              >
-                <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Employee Master Data
+                </p>
+                <p className="text-xs text-slate-500">Table stays boxed here to avoid layout gaps.</p>
+              </div>
+              <div className="relative max-h-[68vh] max-w-full overflow-auto rounded-xl border border-slate-200 bg-white">
+              <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
                 <thead className="bg-slate-200 text-slate-700">
                   <tr>
                     <th className="sticky left-0 z-30 min-w-[52px] bg-slate-200 p-3 text-center">
@@ -1571,9 +1594,12 @@ export default function ClientEmployeesPage() {
                           }`}
                         >
                           {editingRowId === e.id ? (
-                            column.key === "employmentStatus" ? (
+                            column.key === "employmentStatus" || column.key === "employeeFileStatus" ? (
                               <select
-                                value={editDraft[column.key] ?? "ACTIVE"}
+                                value={
+                                  editDraft[column.key] ??
+                                  (column.key === "employmentStatus" ? "ACTIVE" : "PENDING")
+                                }
                                 onChange={(event) =>
                                   setEditDraft((prev) => ({
                                     ...prev,
@@ -1582,8 +1608,17 @@ export default function ClientEmployeesPage() {
                                 }
                                 className="w-full min-w-[120px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900"
                               >
-                                <option value="ACTIVE">ACTIVE</option>
-                                <option value="INACTIVE">INACTIVE</option>
+                                {column.key === "employmentStatus" ? (
+                                  <>
+                                    <option value="ACTIVE">ACTIVE</option>
+                                    <option value="INACTIVE">INACTIVE</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="PENDING">PENDING</option>
+                                    <option value="CREATED">CREATED</option>
+                                  </>
+                                )}
                               </select>
                             ) : (
                               <input
@@ -1599,15 +1634,9 @@ export default function ClientEmployeesPage() {
                             )
                           ) : (
                             column.key === "employmentStatus" ? (
-                              <span
-                                className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${
-                                  e.employmentStatus === "ACTIVE"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-slate-200 text-slate-700"
-                                }`}
-                              >
-                                {e.employmentStatus}
-                              </span>
+                              renderStatusBadge(e.employmentStatus)
+                            ) : column.key === "employeeFileStatus" ? (
+                              renderStatusBadge(e.employeeFileStatus)
                             ) : (
                               getDisplayValue(e, column.key)
                             )
@@ -1652,6 +1681,16 @@ export default function ClientEmployeesPage() {
                               {e.employmentStatus === "ACTIVE" ? "Set Inactive" : "Set Active"}
                             </button>
                             <button
+                              onClick={() => handleToggleEmployeeFileStatus(e)}
+                              className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                                e.employeeFileStatus === "CREATED"
+                                  ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
+                                  : "bg-blue-600 text-white hover:bg-blue-500"
+                              }`}
+                            >
+                              {e.employeeFileStatus === "CREATED" ? "File Pending" : "File Created"}
+                            </button>
+                            <button
                               onClick={() => handleDeleteEmployee(e.id)}
                               className="rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400"
                             >
@@ -1673,9 +1712,9 @@ export default function ClientEmployeesPage() {
                     </tr>
                   )}
                 </tbody>
-                </table>
+              </table>
               </div>
-            </>
+            </div>
           )}
 
           <p className="mt-3 text-xs text-slate-500">Scroll horizontally to view all columns.</p>

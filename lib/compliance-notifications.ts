@@ -31,6 +31,10 @@ export async function syncComplianceDocumentNotifications(clientId?: string) {
   const desiredKeys = new Set<string>();
 
   for (const document of documents) {
+    if (document.documentStatus !== "ACTIVE" || !document.expiryDate) {
+      continue;
+    }
+
     const expiryStart = new Date(
       document.expiryDate.getFullYear(),
       document.expiryDate.getMonth(),
