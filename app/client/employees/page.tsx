@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
 
 type Employee = {
@@ -411,6 +411,9 @@ function parseLooseDate(value: string | null): Date | null {
 }
 
 export default function ClientEmployeesPage() {
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const topScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const scrollSyncLockRef = useRef(false);
   // 🔐 Client login check
   useEffect(() => {
     async function checkLogin() {
@@ -441,6 +444,10 @@ export default function ClientEmployeesPage() {
   const [checkerOpen, setCheckerOpen] = useState(false);
   const [gapMode, setGapMode] = useState<GapMode>("full");
   const [criticalFields, setCriticalFields] = useState(DEFAULT_CRITICAL_FIELDS);
+  const [scrollbarMetrics, setScrollbarMetrics] = useState({
+    clientWidth: 0,
+    scrollWidth: 0,
+  });
 
   function formatUanNo(value: string | null): string {
     if (!value) return "-";
@@ -764,6 +771,68 @@ export default function ClientEmployeesPage() {
     () => new Set(selectedEmployeeIds),
     [selectedEmployeeIds]
   );
+  const syncScrollbarMetrics = useCallback(() => {
+    const element = tableScrollRef.current;
+    if (!element) return;
+
+    setScrollbarMetrics({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    });
+  }, []);
+
+  const syncScrollPosition = useCallback((source: "table" | "top") => {
+    if (scrollSyncLockRef.current) return;
+
+    const tableElement = tableScrollRef.current;
+    const topElement = topScrollbarRef.current;
+    if (!tableElement || !topElement) return;
+
+    scrollSyncLockRef.current = true;
+    if (source === "table") {
+      topElement.scrollLeft = tableElement.scrollLeft;
+    } else {
+      tableElement.scrollLeft = topElement.scrollLeft;
+    }
+
+    window.requestAnimationFrame(() => {
+      scrollSyncLockRef.current = false;
+    });
+  }, []);
+
+  useEffect(() => {
+    syncScrollbarMetrics();
+
+    const element = tableScrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    const handleResize = () => syncScrollbarMetrics();
+    window.addEventListener("resize", handleResize);
+
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        window.removeEventListener("resize", handleResize);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncScrollbarMetrics();
+    });
+
+    observer.observe(element);
+    const table = element.querySelector("table");
+    if (table instanceof HTMLElement) {
+      observer.observe(table);
+    }
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [syncScrollbarMetrics, filteredEmployees.length, loading]);
+
   const allVisibleSelected =
     filteredEmployeeIds.length > 0 &&
     filteredEmployeeIds.every((employeeId) => selectedEmployeeIdSet.has(employeeId));
@@ -1394,8 +1463,30 @@ export default function ClientEmployeesPage() {
               No employees found. Import an Excel/CSV to see data here.
             </p>
           ) : (
-            <div className="relative mt-6 max-w-full overflow-x-auto rounded-2xl border bg-white">
-              <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
+            <>
+              {scrollbarMetrics.scrollWidth > scrollbarMetrics.clientWidth && (
+                <div className="sticky top-[calc(var(--app-header-height)+1rem)] z-20 mt-6 rounded-t-2xl border border-slate-200 border-b-0 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+                  <div
+                    ref={topScrollbarRef}
+                    onScroll={() => syncScrollPosition("top")}
+                    className="overflow-x-auto overflow-y-hidden"
+                  >
+                    <div
+                      style={{ width: `${scrollbarMetrics.scrollWidth}px`, height: "1px" }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div
+                ref={tableScrollRef}
+                onScroll={() => syncScrollPosition("table")}
+                className={`relative max-w-full overflow-x-auto border bg-white ${
+                  scrollbarMetrics.scrollWidth > scrollbarMetrics.clientWidth
+                    ? "rounded-b-2xl border-t-0"
+                    : "mt-6 rounded-2xl"
+                }`}
+              >
+                <table className="min-w-[3200px] w-full border-collapse text-sm text-slate-900">
                 <thead className="bg-slate-200 text-slate-700">
                   <tr>
                     <th className="sticky left-0 z-30 min-w-[52px] bg-slate-200 p-3 text-center">
@@ -1582,8 +1673,9 @@ export default function ClientEmployeesPage() {
                     </tr>
                   )}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+            </>
           )}
 
           <p className="mt-3 text-xs text-slate-500">Scroll horizontally to view all columns.</p>
