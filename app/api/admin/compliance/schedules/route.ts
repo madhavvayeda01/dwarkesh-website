@@ -80,7 +80,7 @@ export async function GET(req: Request) {
 
   return ok("Compliance schedules fetched", {
     templates,
-    events: events.map((event) => ({
+    events: events.map((event: { scheduledFor: Date }) => ({
       ...event,
       scheduledLabel: toDateLabel(event.scheduledFor),
     })),
@@ -128,8 +128,8 @@ export async function POST(req: Request) {
   });
 
   const schedule = generateFutureComplianceSchedule({
-    titles: templates.map((template) => template.title),
-    holidays: holidayRows.map((row) => row.date.toISOString().slice(0, 10)),
+    titles: templates.map((template: { title: string }) => template.title),
+    holidays: holidayRows.map((row: { date: Date }) => row.date.toISOString().slice(0, 10)),
     countPerTitle,
   });
 
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
   }>;
 
   for (const row of schedule) {
-    const template = templates.find((item) => item.title === row.title);
+    const template = templates.find((item: { id: string; title: string; fileUrl: string }) => item.title === row.title);
     if (!template) continue;
 
     let templateBuffer = templateBufferById.get(template.id);
@@ -201,7 +201,13 @@ export async function POST(req: Request) {
   }
 
   const createdEvents = await prisma.$transaction(
-    generatedEvents.map((event) =>
+    generatedEvents.map((event: {
+      title: string;
+      scheduledFor: Date;
+      generatedFileUrl: string;
+      generatedFilePath: string;
+      templateId: string;
+    }) =>
       prisma.complianceScheduleEvent.create({
         data: {
           clientId,
@@ -217,7 +223,7 @@ export async function POST(req: Request) {
   );
 
   return ok("Compliance schedule generated", {
-    events: createdEvents.map((event) => ({
+    events: createdEvents.map((event: { scheduledFor: Date }) => ({
       ...event,
       scheduledLabel: toDateLabel(event.scheduledFor),
     })),

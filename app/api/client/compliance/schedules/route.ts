@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   const { error, session } = await requireClientPage(pageKey);
   if (error || !session) return error;
 
-  const events = await prisma.complianceScheduleEvent.findMany({
+  const events: Array<{ scheduledFor: Date }> = await prisma.complianceScheduleEvent.findMany({
     where: {
       clientId: session.clientId,
       category: parsed.data.category,
@@ -41,7 +41,7 @@ export async function GET(req: Request) {
   });
 
   return ok("Compliance schedule fetched", {
-    events: events.map((event) => ({
+    events: events.map((event: { scheduledFor: Date }) => ({
       ...event,
       scheduledLabel: toDateLabel(event.scheduledFor),
     })),

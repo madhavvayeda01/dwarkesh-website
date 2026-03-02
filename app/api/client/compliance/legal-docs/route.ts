@@ -5,14 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { syncComplianceDocumentNotifications } from "@/lib/compliance-notifications";
 
 function toStatus(
-  documentStatus: ComplianceDocumentStatusValue,
+  documentStatus: ComplianceDocumentStatusValue | null | undefined,
   expiryDate: Date | null
 ) {
-  if (documentStatus === "NOT_APPLICABLE") {
+  const normalizedStatus = documentStatus || "ACTIVE";
+
+  if (normalizedStatus === "NOT_APPLICABLE") {
     return { label: "Not Applicable", tone: "neutral", days: null };
   }
 
-  if (documentStatus === "NOT_AVAILABLE") {
+  if (normalizedStatus === "NOT_AVAILABLE") {
     return { label: "Not Available", tone: "neutral", days: null };
   }
 
@@ -46,6 +48,7 @@ export async function GET() {
   return ok("Compliance legal docs fetched", {
     documents: documents.map((doc) => ({
       ...doc,
+      documentStatus: doc.documentStatus || "ACTIVE",
       status: toStatus(doc.documentStatus, doc.expiryDate),
     })),
   });

@@ -26,7 +26,7 @@ const createSchema = z.object({
 function toDocumentPayload(document: {
   id: string;
   name: string;
-  documentStatus: string;
+  documentStatus: string | null | undefined;
   issueDate: Date | null;
   expiryDate: Date | null;
   remarks: string | null;
@@ -37,7 +37,7 @@ function toDocumentPayload(document: {
   return {
     id: document.id,
     name: document.name,
-    documentStatus: document.documentStatus,
+    documentStatus: document.documentStatus || "ACTIVE",
     issueDate: formatDateForInput(document.issueDate),
     expiryDate: formatDateForInput(document.expiryDate),
     remarks: document.remarks || "",

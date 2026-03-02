@@ -11,6 +11,17 @@ type NotificationPayload = {
 
 const POLL_INTERVAL_MS = 8000;
 
+async function readJsonSafe(res: Response) {
+  const text = await res.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function playNotificationBeep() {
   try {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -55,8 +66,10 @@ export default function NotificationBell() {
       fetch("/api/admin/me", { cache: "no-store" }),
       fetch("/api/client/me", { cache: "no-store" }),
     ]);
-    const adminData = await adminRes.json();
-    const clientData = await clientRes.json();
+    const [adminData, clientData] = await Promise.all([
+      readJsonSafe(adminRes),
+      readJsonSafe(clientRes),
+    ]);
     const adminLoggedIn = adminData?.data?.loggedIn ?? adminData?.loggedIn ?? false;
     const clientLoggedIn = clientData?.data?.loggedIn ?? clientData?.loggedIn ?? false;
 
@@ -76,7 +89,7 @@ export default function NotificationBell() {
     const since = storageKey ? localStorage.getItem(storageKey) : null;
     const url = since ? `${endpoint}?since=${encodeURIComponent(since)}` : endpoint;
     const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
+    const data = await readJsonSafe(res);
     const payload: NotificationPayload = (data?.data ?? data) || {
       unreadCount: 0,
       latestAt: null,

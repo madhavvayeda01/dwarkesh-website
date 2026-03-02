@@ -34,13 +34,13 @@ export async function GET(req: Request) {
   const clientIds = await listClientIdsWithChat();
   if (clientIds.length === 0) return ok("No chat threads yet", { threads: [] });
 
-  const clients = await prisma.client.findMany({
+  const clients: Array<{ id: string; name: string; email: string }> = await prisma.client.findMany({
     where: { id: { in: clientIds } },
     select: { id: true, name: true, email: true },
   });
 
   const threads = await Promise.all(
-    clients.map(async (client) => {
+    clients.map(async (client: { id: string; name: string; email: string }) => {
       const messages = await getMessages(client.id);
       const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
       return {

@@ -1,10 +1,23 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fail } from "@/lib/api-response";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "uploads";
 const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+
+function requiresPersistentStorage() {
+  return process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+}
+
+function getStorageConfigError() {
+  if (!USE_SUPABASE && requiresPersistentStorage()) {
+    return "Supabase storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and keep SUPABASE_BUCKET=uploads in Vercel.";
+  }
+
+  return null;
+}
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -57,6 +70,11 @@ export async function uploadToSupabase(
   const objectPath = `${safeFolder}/${safeName}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
 
+  const configError = getStorageConfigError();
+  if (configError) {
+    return { ok: false, error: configError };
+  }
+
   if (!USE_SUPABASE) {
     return writeLocalObject(objectPath, bytes);
   }
@@ -84,6 +102,11 @@ export async function uploadBufferToSupabase(
 ): Promise<{ ok: true; fileUrl: string } | { ok: false; error: string }> {
   const safeObjectPath = toSafeObjectPath(objectPath);
   const payload = new Uint8Array(bytes);
+
+  const configError = getStorageConfigError();
+  if (configError) {
+    return { ok: false, error: configError };
+  }
 
   if (!USE_SUPABASE) {
     return writeLocalObject(safeObjectPath, payload);
@@ -146,6 +169,11 @@ export async function listSupabaseFilesByPrefix(
   const safePrefix = normalizePrefix(toSafeObjectPath(prefix));
   const localFiles = await listLocalFilesByPrefix(safePrefix);
 
+  const configError = getStorageConfigError();
+  if (configError) {
+    return { ok: false, error: configError };
+  }
+
   if (!USE_SUPABASE) {
     return { ok: true, files: localFiles };
   }
@@ -203,6 +231,11 @@ export async function deleteObjectByPath(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const safeObjectPath = toSafeObjectPath(objectPath);
 
+  const configError = getStorageConfigError();
+  if (configError) {
+    return { ok: false, error: configError };
+  }
+
   if (!USE_SUPABASE) {
     try {
       const absolutePath = path.join(process.cwd(), "public", "uploads", safeObjectPath);
@@ -233,6 +266,10 @@ export async function deleteObjectByPath(
 }
 
 export function ensureStorageConfigured() {
-  // Local fallback is allowed for development when Supabase is not configured.
-  return null;
+  const configError = getStorageConfigError();
+  if (!configError) {
+    return null;
+  }
+
+  return fail(configError, 500);
 }

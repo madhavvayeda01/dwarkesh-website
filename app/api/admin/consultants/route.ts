@@ -1,5 +1,4 @@
 import bcrypt from "bcrypt";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
@@ -17,7 +16,15 @@ export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  const consultants = await prisma.consultant.findMany({
+  const consultants: Array<{
+    id: string;
+    name: string;
+    email: string;
+    active: boolean;
+    pageAccess: unknown;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = await prisma.consultant.findMany({
     select: {
       id: true,
       name: true,
@@ -31,7 +38,15 @@ export async function GET() {
   });
 
   return ok("Consultants fetched", {
-    consultants: consultants.map((consultant) => ({
+    consultants: consultants.map((consultant: {
+      id: string;
+      name: string;
+      email: string;
+      active: boolean;
+      pageAccess: unknown;
+      createdAt: Date;
+      updatedAt: Date;
+    }) => ({
       ...consultant,
       pageAccess: toStoredAdminPageAccessMap(consultant.pageAccess),
     })),
@@ -94,8 +109,10 @@ export async function POST(req: Request) {
     }, 201);
   } catch (createError: unknown) {
     if (
-      createError instanceof Prisma.PrismaClientKnownRequestError &&
-      createError.code === "P2002"
+      typeof createError === "object" &&
+      createError !== null &&
+      "code" in createError &&
+      (createError as { code?: string }).code === "P2002"
     ) {
       return fail("A consultant with this email already exists.", 409);
     }

@@ -12,7 +12,7 @@ type ClientOption = {
 type LegalDoc = {
   id: string;
   name: string;
-  documentStatus: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
+  documentStatus?: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
   issueDate: string | null;
   expiryDate: string | null;
   remarks: string | null;
@@ -35,15 +35,21 @@ function formatDate(value: string | null) {
   });
 }
 
+function normalizeDocumentStatus(value: LegalDoc["documentStatus"]) {
+  return value || "ACTIVE";
+}
+
 function formatDocumentStatus(value: LegalDoc["documentStatus"]) {
-  return value.replace(/_/g, " ");
+  return normalizeDocumentStatus(value).replace(/_/g, " ");
 }
 
 function getStatus(document: Pick<LegalDoc, "documentStatus" | "expiryDate">) {
-  if (document.documentStatus === "NOT_APPLICABLE") {
+  const documentStatus = normalizeDocumentStatus(document.documentStatus);
+
+  if (documentStatus === "NOT_APPLICABLE") {
     return { label: "Not Applicable", tone: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100" };
   }
-  if (document.documentStatus === "NOT_AVAILABLE" || !document.expiryDate) {
+  if (documentStatus === "NOT_AVAILABLE" || !document.expiryDate) {
     return { label: "Not Available", tone: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100" };
   }
 
@@ -96,7 +102,11 @@ export default function AdminComplianceLegalDocsPage() {
       return;
     }
 
-    setDocs(data?.data?.documents || []);
+    const nextDocs = ((data?.data?.documents || []) as LegalDoc[]).map((doc) => ({
+      ...doc,
+      documentStatus: normalizeDocumentStatus(doc.documentStatus),
+    }));
+    setDocs(nextDocs);
   }
 
   useEffect(() => {
@@ -228,7 +238,7 @@ export default function AdminComplianceLegalDocsPage() {
     setEditingId(doc.id);
     setForm({
       name: doc.name,
-      documentStatus: doc.documentStatus,
+      documentStatus: normalizeDocumentStatus(doc.documentStatus),
       issueDate: doc.issueDate ? new Date(doc.issueDate).toISOString().slice(0, 10) : "",
       expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : "",
       remarks: doc.remarks || "",

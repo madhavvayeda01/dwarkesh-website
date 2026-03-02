@@ -6,7 +6,7 @@ import ClientSidebar from "@/components/ClientSidebar";
 type LegalDoc = {
   id: string;
   name: string;
-  documentStatus: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
+  documentStatus?: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
   issueDate: string | null;
   expiryDate: string | null;
   remarks: string | null;
@@ -35,8 +35,12 @@ function toneClass(tone: LegalDoc["status"]["tone"]) {
   return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200";
 }
 
+function normalizeDocumentStatus(value: LegalDoc["documentStatus"]) {
+  return value || "ACTIVE";
+}
+
 function formatDocumentStatus(value: LegalDoc["documentStatus"]) {
-  return value.replace(/_/g, " ");
+  return normalizeDocumentStatus(value).replace(/_/g, " ");
 }
 
 export default function ClientComplianceLegalDocsPage() {
@@ -68,7 +72,11 @@ export default function ClientComplianceLegalDocsPage() {
         return;
       }
 
-      setDocs(data?.data?.documents || []);
+      const nextDocs = ((data?.data?.documents || []) as LegalDoc[]).map((doc) => ({
+        ...doc,
+        documentStatus: normalizeDocumentStatus(doc.documentStatus),
+      }));
+      setDocs(nextDocs);
       setLoading(false);
     }
 

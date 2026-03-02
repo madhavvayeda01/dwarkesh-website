@@ -92,7 +92,7 @@ export async function DELETE(
         await prisma.programAudit.update({
           where: { id: audit.id },
           data: {
-            parameterOptionIds: audit.parameterOptionIds.filter((value) => value !== id),
+            parameterOptionIds: audit.parameterOptionIds.filter((value: string) => value !== id),
           },
         });
       }
@@ -108,7 +108,7 @@ export async function DELETE(
         await prisma.programAudit.update({
           where: { id: audit.id },
           data: {
-            documentOptionIds: audit.documentOptionIds.filter((value) => value !== id),
+            documentOptionIds: audit.documentOptionIds.filter((value: string) => value !== id),
           },
         });
       }
@@ -123,7 +123,7 @@ export async function DELETE(
       await prisma.programAudit.update({
         where: { id: audit.id },
         data: {
-          floorOptionIds: audit.floorOptionIds.filter((value) => value !== id),
+          floorOptionIds: audit.floorOptionIds.filter((value: string) => value !== id),
         },
       });
     }

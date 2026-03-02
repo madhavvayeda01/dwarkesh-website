@@ -34,14 +34,14 @@ export async function GET(req: Request) {
   });
   if (!parsed.success) return fail("Invalid query", 400, parsed.error.flatten());
 
-  const holidays = await prisma.clientHoliday.findMany({
+  const holidays: Array<{ id: string; date: Date; name: string; year: number }> = await prisma.clientHoliday.findMany({
     where: { clientId: parsed.data.clientId, year: parsed.data.year },
     orderBy: { date: "asc" },
     select: { id: true, date: true, name: true, year: true },
   });
 
   return ok("Holidays fetched", {
-    holidays: holidays.map((holiday) => ({
+    holidays: holidays.map((holiday: { id: string; date: Date; name: string; year: number }) => ({
       ...holiday,
       date: formatDate(holiday.date),
     })),

@@ -19,7 +19,13 @@ export async function GET(req: Request) {
   });
   if (!parsed.success) return fail("Client is required", 400, parsed.error.flatten());
 
-  const documents = await prisma.complianceLegalDocument.findMany({
+  const documents: Array<{
+    name: string;
+    documentStatus: string;
+    issueDate: Date | null;
+    expiryDate: Date | null;
+    remarks: string | null;
+  }> = await prisma.complianceLegalDocument.findMany({
     where: { clientId: parsed.data.clientId },
     orderBy: [{ expiryDate: "asc" }, { name: "asc" }],
   });

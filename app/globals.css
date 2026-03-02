@@ -3,6 +3,7 @@
 
 :root {
   --app-header-height: 8.5rem;
+  --app-sidebar-width: 14rem;
 }
 
 @media (min-width: 768px) {
@@ -19,6 +20,18 @@ body {
   background: #f1f5f9;
   color: #0f172a;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.app-dashboard-sidebar {
+  position: sticky;
+  top: var(--app-header-height);
+  z-index: 20;
+  align-self: flex-start;
+  flex: 0 0 var(--app-sidebar-width);
+  width: var(--app-sidebar-width);
+  min-width: var(--app-sidebar-width);
+  height: calc(100vh - var(--app-header-height));
+  overflow-y: auto;
 }
 
 input,

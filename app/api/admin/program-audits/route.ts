@@ -24,7 +24,7 @@ function resolveNames(
   ids: string[],
   byId: Record<string, string>
 ) {
-  return ids.map((id) => byId[id]).filter(Boolean);
+  return ids.map((id: string) => byId[id]).filter(Boolean);
 }
 
 export async function GET() {
@@ -41,11 +41,15 @@ export async function GET() {
     prisma.auditFloorOption.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
 
-  const parameterById = Object.fromEntries(parameterOptions.map((item) => [item.id, item.name]));
-  const documentById = Object.fromEntries(documentOptions.map((item) => [item.id, item.name]));
-  const floorById = Object.fromEntries(floorOptions.map((item) => [item.id, item.name]));
+  const parameterById = Object.fromEntries(parameterOptions.map((item: { id: string; name: string }) => [item.id, item.name]));
+  const documentById = Object.fromEntries(documentOptions.map((item: { id: string; name: string }) => [item.id, item.name]));
+  const floorById = Object.fromEntries(floorOptions.map((item: { id: string; name: string }) => [item.id, item.name]));
 
-  const records = audits.map((audit) => ({
+  const records = audits.map((audit: {
+    parameterOptionIds: string[];
+    documentOptionIds: string[];
+    floorOptionIds: string[];
+  }) => ({
     ...audit,
     parameters: resolveNames(audit.parameterOptionIds, parameterById),
     documents: resolveNames(audit.documentOptionIds, documentById),
