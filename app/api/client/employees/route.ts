@@ -45,46 +45,29 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const updates = employees
-      .map((employee) => {
-        const nextDob = normalizeStoredDateMaybe(employee.dob);
-        const nextDoj = normalizeStoredDateMaybe(employee.doj);
-        const nextDor = normalizeStoredDateMaybe(employee.dor);
-        const changed =
-          nextDob !== employee.dob || nextDoj !== employee.doj || nextDor !== employee.dor;
-        if (!changed) return null;
-        return { id: employee.id, dob: nextDob, doj: nextDoj, dor: nextDor };
-      })
-      .filter((item): item is { id: string; dob: string | null; doj: string | null; dor: string | null } => item !== null);
-
-    if (updates.length > 0) {
-      await prisma.$transaction(
-        updates.map((item) =>
-          prisma.employee.update({
-            where: { id: item.id },
-            data: { dob: item.dob, doj: item.doj, dor: item.dor },
-          })
-        )
-      );
-
-      for (const employee of employees) {
-        const match = updates.find((u) => u.id === employee.id);
-        if (!match) continue;
-        employee.dob = match.dob;
-        employee.doj = match.doj;
-        employee.dor = match.dor;
-      }
-    }
-
     logger.info("employee.list.success", {
       clientId: session.clientId,
       count: employees.length,
-      repairedDateRows: updates.length,
+      repairedDateRows: employees.filter((employee) => {
+        const nextDob = normalizeStoredDateMaybe(employee.dob);
+        const nextDoj = normalizeStoredDateMaybe(employee.doj);
+        const nextDor = normalizeStoredDateMaybe(employee.dor);
+        return nextDob !== employee.dob || nextDoj !== employee.doj || nextDor !== employee.dor;
+      }).length,
     });
 
     return ok(
       "Employees fetched",
-      { employees: employees.map(sanitizeHashOnlyStrings) }
+      {
+        employees: employees.map((employee) =>
+          sanitizeHashOnlyStrings({
+            ...employee,
+            dob: normalizeStoredDateMaybe(employee.dob),
+            doj: normalizeStoredDateMaybe(employee.doj),
+            dor: normalizeStoredDateMaybe(employee.dor),
+          })
+        ),
+      }
     );
   } catch (err: any) {
     logger.error("employee.list.error", {

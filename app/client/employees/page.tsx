@@ -474,9 +474,19 @@ export default function ClientEmployeesPage() {
   async function fetchEmployees() {
     setLoading(true);
     const res = await fetch("/api/client/employees", { cache: "no-store" });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = data?.message || "Failed to load employees.";
+      setMsg(message);
+      setEmployees([]);
+      setLoading(false);
+      if (res.status === 401) {
+        window.location.href = "/signin";
+      }
+      return;
+    }
     const payload = data?.data ?? data;
-    const nextEmployees = normalizeHashOnlyValues(payload.employees || []);
+    const nextEmployees = normalizeHashOnlyValues(payload?.employees || []);
     setEmployees(nextEmployees);
     setSelectedEmployeeIds((prev) =>
       prev.filter((id) => nextEmployees.some((employee) => employee.id === id))

@@ -298,9 +298,19 @@ export default function ClientPayrollPage() {
     async function loadEmployees() {
       setLoading(true);
       const res = await fetch("/api/client/employees", { cache: "no-store" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = data?.message || "Failed to load employee data for payroll.";
+        setStatus(message);
+        setRows([]);
+        setLoading(false);
+        if (res.status === 401) {
+          window.location.href = "/signin";
+        }
+        return;
+      }
       const payload = data?.data ?? data;
-      const employees: Employee[] = (payload.employees || []).filter(
+      const employees: Employee[] = (payload?.employees || []).filter(
         (employee: Employee) => employee.employmentStatus === "ACTIVE"
       );
 
