@@ -2,13 +2,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --app-header-height: 8.5rem;
+  --app-header-height: 9rem;
   --app-sidebar-width: 14rem;
 }
 
 @media (min-width: 768px) {
   :root {
-    --app-header-height: 4.75rem;
+    --app-header-height: 6rem;
   }
 }
 
@@ -23,15 +23,34 @@ body {
 }
 
 .app-dashboard-sidebar {
-  position: sticky;
-  top: var(--app-header-height);
-  z-index: 20;
-  align-self: flex-start;
   flex: 0 0 var(--app-sidebar-width);
   width: var(--app-sidebar-width);
   min-width: var(--app-sidebar-width);
+  position: relative;
+}
+
+.app-dashboard-sidebar__inner {
+  position: fixed;
+  top: var(--app-header-height);
+  left: 0;
+  z-index: 30;
+  width: var(--app-sidebar-width);
   height: calc(100vh - var(--app-header-height));
   overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .app-dashboard-sidebar {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .app-dashboard-sidebar__inner {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
 }
 
 input,

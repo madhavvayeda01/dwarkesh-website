@@ -133,25 +133,27 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="app-dashboard-sidebar border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
-      <div className="rounded-xl border border-white/15 bg-white/10 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-        <h2 className="text-base font-extrabold tracking-tight">Admin Panel</h2>
-        <p className="mt-0.5 text-[11px] text-slate-300">
-          {admin
-            ? `${admin.type === "consultant" ? "Consultant" : "Primary Admin"}: ${admin.name}`
-            : "Admin access"}
-        </p>
-      </div>
+    <aside className="app-dashboard-sidebar">
+      <div className="app-dashboard-sidebar__inner border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
+        <div className="rounded-xl border border-white/15 bg-white/10 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <h2 className="text-base font-extrabold tracking-tight">Admin Panel</h2>
+          <p className="mt-0.5 text-[11px] text-slate-300">
+            {admin
+              ? `${admin.type === "consultant" ? "Consultant" : "Primary Admin"}: ${admin.name}`
+              : "Admin access"}
+          </p>
+        </div>
 
-      <nav className="mt-3 flex flex-col gap-1.5 text-sm font-semibold">
-        {renderGroup("core")}
-        {renderGroup("client")}
-        {renderGroup("hr")}
-        {renderGroup("compliance")}
-        {renderGroup("ops")}
-        {renderGroup("audit")}
-        {renderGroup("chat")}
-      </nav>
+        <nav className="mt-3 flex flex-col gap-1.5 text-sm font-semibold">
+          {renderGroup("core")}
+          {renderGroup("client")}
+          {renderGroup("hr")}
+          {renderGroup("compliance")}
+          {renderGroup("ops")}
+          {renderGroup("audit")}
+          {renderGroup("chat")}
+        </nav>
+      </div>
     </aside>
   );
 }
