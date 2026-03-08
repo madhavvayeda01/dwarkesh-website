@@ -309,15 +309,54 @@ export default function ClientInOutPage() {
         .filter((item) => item.mark === "P")
         .map((item) => item.dayIndex);
       const maxOtMinutes = presentDayIndexes.length * 120;
-      let remainingOtMinutes = Math.max(
+      const targetOtMinutes = Math.max(
         0,
         Math.min(maxOtMinutes, Math.round(Math.max(0, payrollOtHours) * 60))
       );
-      for (const dayIndex of presentDayIndexes) {
-        if (remainingOtMinutes <= 0) break;
-        const assigned = Math.min(120, remainingOtMinutes);
-        otHrs[dayIndex] = assigned;
-        remainingOtMinutes -= assigned;
+
+      if (targetOtMinutes > 0 && presentDayIndexes.length > 0) {
+        const plans = presentDayIndexes.map((dayIndex) => ({
+          dayIndex,
+          ot: 0,
+          weight: 0.35 + rand() * 0.65,
+        }));
+        const totalWeight = plans.reduce((sum, plan) => sum + plan.weight, 0);
+
+        // First pass: proportional randomized spread.
+        let assignedMinutes = 0;
+        for (const plan of plans) {
+          const proportional = Math.round((targetOtMinutes * plan.weight) / totalWeight);
+          plan.ot = Math.max(0, Math.min(120, proportional));
+          assignedMinutes += plan.ot;
+        }
+
+        let delta = targetOtMinutes - assignedMinutes;
+
+        // Second pass: correct delta with random chunk adjustments.
+        while (delta !== 0) {
+          const candidates =
+            delta > 0
+              ? plans.filter((plan) => plan.ot < 120)
+              : plans.filter((plan) => plan.ot > 0);
+          if (candidates.length === 0) break;
+
+          const picked = candidates[Math.floor(rand() * candidates.length)];
+          const chunk = Math.max(1, Math.round((0.08 + rand() * 0.42) * 60)); // ~5 to 30 mins
+
+          if (delta > 0) {
+            const add = Math.min(120 - picked.ot, delta, chunk);
+            picked.ot += add;
+            delta -= add;
+          } else {
+            const remove = Math.min(picked.ot, Math.abs(delta), chunk);
+            picked.ot -= remove;
+            delta += remove;
+          }
+        }
+
+        for (const plan of plans) {
+          otHrs[plan.dayIndex] = plan.ot;
+        }
       }
       const workHrs = attendance.map((m, i) => {
         if (m !== "P") return null;
