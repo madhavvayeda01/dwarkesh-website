@@ -684,7 +684,7 @@ export default function ClientInOutPage() {
               {loading ? (
                 <p className="text-slate-600">Fetching device data...</p>
               ) : payrollEmployees.length === 0 ? (
-                <p className="text-slate-600">No payroll-mapped employees found for selected month/year.</p>
+                <p className="text-slate-600">unable to fetch data for current month please wait for the month to end</p>
               ) : computed.length === 0 ? (
                 <p className="text-slate-600">No employees match current filters.</p>
               ) : (
