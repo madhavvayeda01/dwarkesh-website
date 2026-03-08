@@ -32,20 +32,23 @@ export async function GET(req: Request) {
     select: {
       employeeCode: true,
       payDays: true,
+      otHoursTarget: true,
     },
   });
 
   const payDaysByCode: Record<string, number> = {};
+  const otHoursByCode: Record<string, number> = {};
   for (const row of rows) {
     const code = normalizeEmployeeCode(row.employeeCode);
     if (!code) continue;
     payDaysByCode[code] = Number(row.payDays || 0);
+    otHoursByCode[code] = Number(row.otHoursTarget || 0);
   }
 
-  return ok("Payroll pay days fetched", {
+  return ok("Payroll pay days and OT hours fetched", {
     month: parsed.data.month,
     year: parsed.data.year,
     payDaysByCode,
+    otHoursByCode,
   });
 }
-

@@ -88,6 +88,7 @@ export default function ClientInOutPage() {
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payDaysByCode, setPayDaysByCode] = useState<Record<string, number>>({});
+  const [otHoursByCode, setOtHoursByCode] = useState<Record<string, number>>({});
   const [shiftPreviewRows, setShiftPreviewRows] = useState<ShiftPreviewRow[]>([]);
   const [shiftPreviewConfig, setShiftPreviewConfig] = useState<ShiftPreviewConfig | null>(null);
   const [shiftPreviewWarnings, setShiftPreviewWarnings] = useState<string[]>([]);
@@ -145,6 +146,7 @@ export default function ClientInOutPage() {
       const maxPayDays = Math.max(0, Math.min(workingDays, dayHeaders.length));
       const empCode = normalizeEmployeeCode(employee.empNo || "");
       const payrollPayDays = empCode ? Number(payDaysByCode[empCode] ?? 0) : 0;
+      const payrollOtHours = empCode ? Number(otHoursByCode[empCode] ?? 0) : 0;
       const payDays = Math.max(0, Math.min(maxPayDays, payrollPayDays));
 
       const ranked = helper
@@ -185,13 +187,29 @@ export default function ClientInOutPage() {
       });
       const shiftHrs = attendance.map((m) => (m === "P" ? 480 : null));
       const breakHrs = attendance.map((m) => (m === "P" ? 60 : null));
-      const workHrs = attendance.map((m, i) => {
+      const baseWorkHrs = attendance.map((m, i) => {
         if (m !== "P") return null;
         return Math.max(0, (inHrs[i] ?? 0) - (breakHrs[i] ?? 0));
       });
-      const otHrs = attendance.map((m, i) => {
+      const otHrs: Array<number | null> = attendance.map((m) => (m === "P" ? 0 : null));
+      const presentDayIndexes = attendance
+        .map((mark, dayIndex) => ({ mark, dayIndex }))
+        .filter((item) => item.mark === "P")
+        .map((item) => item.dayIndex);
+      const maxOtMinutes = presentDayIndexes.length * 120;
+      let remainingOtMinutes = Math.max(
+        0,
+        Math.min(maxOtMinutes, Math.round(Math.max(0, payrollOtHours) * 60))
+      );
+      for (const dayIndex of presentDayIndexes) {
+        if (remainingOtMinutes <= 0) break;
+        const assigned = Math.min(120, remainingOtMinutes);
+        otHrs[dayIndex] = assigned;
+        remainingOtMinutes -= assigned;
+      }
+      const workHrs = attendance.map((m, i) => {
         if (m !== "P") return null;
-        return Math.max(0, (workHrs[i] ?? 0) - (shiftHrs[i] ?? 0));
+        return (baseWorkHrs[i] ?? 0) + (otHrs[i] ?? 0);
       });
 
       const counts = attendance.reduce(
@@ -227,7 +245,7 @@ export default function ClientInOutPage() {
         },
       };
     });
-  }, [employees, month, year, dayHeaders, payDaysByCode]);
+  }, [employees, month, year, dayHeaders, payDaysByCode, otHoursByCode]);
 
   useEffect(() => {
     async function init() {
@@ -263,11 +281,14 @@ export default function ClientInOutPage() {
         const payload = data?.data ?? data;
         if (!res.ok) {
           setPayDaysByCode({});
+          setOtHoursByCode({});
           return;
         }
         setPayDaysByCode((payload?.payDaysByCode || {}) as Record<string, number>);
+        setOtHoursByCode((payload?.otHoursByCode || {}) as Record<string, number>);
       } catch {
         setPayDaysByCode({});
+        setOtHoursByCode({});
       }
     }
 
