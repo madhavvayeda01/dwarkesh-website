@@ -41,6 +41,15 @@ type ShiftPreviewConfig = {
 
 type ShiftCode = "G" | "A" | "B" | "C";
 type AttendanceMark = "P" | "A" | "W" | "H";
+type InOutSortField =
+  | "empCode"
+  | "name"
+  | "dept"
+  | "designation"
+  | "status"
+  | "payDays"
+  | "otHours";
+type InOutSortDirection = "asc" | "desc";
 const SHIFT_CODES: ShiftCode[] = ["G", "A", "B", "C"];
 const WEEK_DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
 const BLOCK_ROWS = ["ATTENDANCE", "IN.TIME", "OUT.TIME", "In Hrs", "Shift Hrs", "Break Hrs", "Work Hrs", "OT Hrs"] as const;
@@ -105,6 +114,8 @@ export default function ClientInOutPage() {
     designation: "",
     status: "",
   });
+  const [sortBy, setSortBy] = useState<InOutSortField>("empCode");
+  const [sortDirection, setSortDirection] = useState<InOutSortDirection>("asc");
   const today = new Date();
   const [month, setMonth] = useState<number>(today.getMonth());
   const [year, setYear] = useState<number>(today.getFullYear());
@@ -183,8 +194,62 @@ export default function ClientInOutPage() {
     });
   }, [payrollEmployees, filters]);
 
+  const sortedPayrollEmployees = useMemo(() => {
+    const items = [...filteredPayrollEmployees];
+    const factor = sortDirection === "asc" ? 1 : -1;
+    const compareText = (left: string, right: string) =>
+      left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+
+    items.sort((a, b) => {
+      const aCode = normalizeEmployeeCode(a.empNo || "");
+      const bCode = normalizeEmployeeCode(b.empNo || "");
+
+      switch (sortBy) {
+        case "empCode":
+          return factor * compareText(aCode, bCode);
+        case "name":
+          return (
+            factor *
+            compareText(String(a.fullName || ""), String(b.fullName || ""))
+          );
+        case "dept":
+          return (
+            factor *
+            compareText(String(a.currentDept || ""), String(b.currentDept || ""))
+          );
+        case "designation":
+          return (
+            factor *
+            compareText(String(a.designation || ""), String(b.designation || ""))
+          );
+        case "status":
+          return (
+            factor *
+            compareText(
+              String(a.employmentStatus || ""),
+              String(b.employmentStatus || "")
+            )
+          );
+        case "payDays": {
+          const aPay = aCode ? Number(payDaysByCode[aCode] ?? 0) : 0;
+          const bPay = bCode ? Number(payDaysByCode[bCode] ?? 0) : 0;
+          return factor * (aPay - bPay);
+        }
+        case "otHours": {
+          const aOt = aCode ? Number(otHoursByCode[aCode] ?? 0) : 0;
+          const bOt = bCode ? Number(otHoursByCode[bCode] ?? 0) : 0;
+          return factor * (aOt - bOt);
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return items;
+  }, [filteredPayrollEmployees, otHoursByCode, payDaysByCode, sortBy, sortDirection]);
+
   const computed = useMemo(() => {
-    return filteredPayrollEmployees.map((employee, index) => {
+    return sortedPayrollEmployees.map((employee, index) => {
       const rand = rngFactory(makeSeed(`${employee.id}-${month}-${year}`));
       const shift = SHIFT_CODES[Math.floor(rand() * SHIFT_CODES.length)];
       const weeklyOff = WEEK_DAYS[Math.floor(rand() * WEEK_DAYS.length)];
@@ -292,7 +357,7 @@ export default function ClientInOutPage() {
         },
       };
     });
-  }, [filteredPayrollEmployees, month, year, dayHeaders, payDaysByCode, otHoursByCode]);
+  }, [sortedPayrollEmployees, month, year, dayHeaders, payDaysByCode, otHoursByCode]);
 
   useEffect(() => {
     async function init() {
@@ -510,7 +575,7 @@ export default function ClientInOutPage() {
             {activeTab === "attendance" ? (
               <>
                 <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
                     <input
                       value={filters.empCode}
                       onChange={(e) => setFilters((prev) => ({ ...prev, empCode: e.target.value }))}
@@ -543,6 +608,27 @@ export default function ClientInOutPage() {
                       className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
                       placeholder="Filter Status"
                     />
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as InOutSortField)}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                    >
+                      <option value="empCode">Sort by Emp Code</option>
+                      <option value="name">Sort by Name</option>
+                      <option value="dept">Sort by Department</option>
+                      <option value="designation">Sort by Designation</option>
+                      <option value="status">Sort by Status</option>
+                      <option value="payDays">Sort by Pay Days</option>
+                      <option value="otHours">Sort by OT Hours</option>
+                    </select>
+                    <select
+                      value={sortDirection}
+                      onChange={(e) => setSortDirection(e.target.value as InOutSortDirection)}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                    >
+                      <option value="asc">Small to Large / A to Z</option>
+                      <option value="desc">Large to Small / Z to A</option>
+                    </select>
                   </div>
                 </div>
 
