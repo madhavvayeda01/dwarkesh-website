@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadResponseBlob,
+  isAndroidAppWebView,
+  startAndroidPostDownload,
+} from "@/lib/browser-download";
 
 export default function ClientEsicChallanPage() {
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
@@ -43,6 +48,16 @@ export default function ClientEsicChallanPage() {
   async function generateEsicFile() {
     setStatus("Generating ESIC challan file...");
     try {
+      if (isAndroidAppWebView()) {
+        startAndroidPostDownload(
+          "/api/client/esic-challan",
+          { month, year },
+          (message) => setStatus(message)
+        );
+        setStatus("ESIC download started.");
+        return;
+      }
+
       const res = await fetch("/api/client/esic-challan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,16 +70,7 @@ export default function ClientEsicChallanPage() {
         return;
       }
 
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const fileNameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
-      const fileName = fileNameMatch?.[1] || `esic_upload_${year}_${month + 1}.csv`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadResponseBlob(res, `esic_upload_${year}_${month + 1}.csv`);
       setStatus("ESIC challan file generated.");
     } catch {
       setStatus("Failed to generate ESIC challan file.");

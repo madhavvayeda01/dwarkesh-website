@@ -4,11 +4,12 @@ import * as XLSX from "xlsx";
 import { z } from "zod";
 import { fail } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
+import { readJsonOrFormData } from "@/lib/request-body";
 import { listSupabaseFilesByPrefix } from "@/lib/storage";
 
 const requestSchema = z.object({
-  month: z.number().int().min(0).max(11),
-  year: z.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(0).max(11),
+  year: z.coerce.number().int().min(2000).max(2100),
 });
 
 const MONTHS = [
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   if (!session.clientId) return fail("Unauthorized", 401);
   const clientId = session.clientId;
 
-  const parsed = requestSchema.safeParse(await req.json());
+  const parsed = requestSchema.safeParse(await readJsonOrFormData(req));
   if (!parsed.success) {
     return fail("Invalid request payload", 400, parsed.error.flatten());
   }
@@ -127,4 +128,3 @@ export async function POST(req: Request) {
     return fail(message, 500);
   }
 }
-

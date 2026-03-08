@@ -8,15 +8,17 @@ import {
   type AdminPageAccessMap,
   type AdminPageDefinition,
 } from "@/lib/admin-config";
-
-type AdminSession = {
-  name: string;
-  type: "env_admin" | "consultant";
-};
+import {
+  SidebarIcon,
+  getAdminGroupIcon,
+  getAdminPageIcon,
+} from "@/components/sidebar-icons";
+import {
+  useDashboardSidebarState,
+} from "@/components/useDashboardSidebarState";
 
 type AdminMeResponse = {
   loggedIn?: boolean;
-  admin?: AdminSession;
   allowedPages?: AdminPageAccessMap;
 };
 
@@ -46,7 +48,11 @@ function isGroupActive(pathname: string, group: GroupKey) {
     return pathname.startsWith("/admin/compliance/");
   }
   if (group === "ops") {
-    return pathname === "/admin/holiday-master" || pathname === "/admin/in-out";
+    return (
+      pathname === "/admin/holiday-master" ||
+      pathname === "/admin/shift-master" ||
+      pathname === "/admin/in-out"
+    );
   }
   if (group === "audit") {
     return pathname.startsWith("/admin/audit") || pathname === "/admin/training-calendar";
@@ -57,19 +63,26 @@ function isGroupActive(pathname: string, group: GroupKey) {
 export default function Sidebar() {
   const pathname = usePathname();
   const [openGroup, setOpenGroup] = useState<GroupKey | null>(null);
-  const [admin, setAdmin] = useState<AdminSession | null>(null);
   const [allowedPages, setAllowedPages] = useState<AdminPageAccessMap | null>(null);
+  const {
+    collapsed,
+    compact,
+    hovered,
+    handlePointerEnter,
+    handlePointerLeave,
+    handleFocusCapture,
+    handleBlurCapture,
+  } =
+    useDashboardSidebarState({
+      storageKey: "dwarkesh_admin_sidebar_state",
+    });
 
   useEffect(() => {
     async function loadAdmin() {
       const res = await fetch("/api/admin/me", { cache: "no-store" });
       const data = (await res.json().catch(() => ({}))) as { data?: AdminMeResponse } & AdminMeResponse;
       const payload = data.data ?? data;
-      if (payload.loggedIn && payload.admin) {
-        setAdmin({
-          name: payload.admin.name || "Primary Admin",
-          type: payload.admin.type || "env_admin",
-        });
+      if (payload.loggedIn) {
         setAllowedPages(payload.allowedPages || null);
       }
     }
@@ -95,16 +108,19 @@ export default function Sidebar() {
   }, [visiblePages]);
 
   const linkClass = (path: string) =>
-    `block rounded-lg px-3 py-2 text-sm font-semibold transition ${
+    `app-sidebar-navitem rounded-[1rem] px-3 py-2.5 text-sm font-semibold transition ${
       pathname === path
-        ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+        ? "border-white/20 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
         : "text-slate-200 hover:bg-white/10 hover:text-white"
     }`;
 
   function renderPageLink(page: AdminPageDefinition) {
     return (
-      <Link key={page.key} href={page.href} className={linkClass(page.href)}>
-        {page.label}
+      <Link key={page.key} href={page.href} className={linkClass(page.href)} title={page.label}>
+        <span className="app-sidebar-navitem__glyph">
+          <SidebarIcon name={getAdminPageIcon(page.key)} />
+        </span>
+        <span className="app-sidebar-navitem__text truncate">{page.label}</span>
       </Link>
     );
   }
@@ -112,20 +128,48 @@ export default function Sidebar() {
   function renderGroup(group: GroupKey) {
     const pages = groupedPages[group];
     if (pages.length === 0) return null;
+    const active = isGroupActive(pathname, group);
+    const expanded = !compact && (openGroup === group || (openGroup === null && active));
 
     return (
-      <div onMouseEnter={() => setOpenGroup(group)} onMouseLeave={() => setOpenGroup(null)}>
+      <div className="app-sidebar-group group/sidebar-section space-y-1">
         <button
           type="button"
-          className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-            isGroupActive(pathname, group)
-              ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+          className={`app-sidebar-navitem rounded-[1rem] px-3 py-2.5 text-left text-sm transition ${
+            active
+              ? "border-white/20 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
               : "text-slate-200 hover:bg-white/10 hover:text-white"
           }`}
+          title={GROUP_LABELS[group]}
+          aria-expanded={expanded}
+          onClick={() =>
+            setOpenGroup((prev) => (prev === group ? null : group))
+          }
         >
-          {GROUP_LABELS[group]}
+          <span className="app-sidebar-navitem__glyph">
+            <SidebarIcon name={getAdminGroupIcon(group)} />
+          </span>
+          <span className="app-sidebar-navitem__text truncate">
+            {GROUP_LABELS[group]}
+          </span>
+          <span
+            className={`app-sidebar-navitem__caret text-xs ${
+              expanded ? "rotate-90" : "group-hover/sidebar-section:rotate-90"
+            }`}
+            aria-hidden="true"
+          >
+            &gt;
+          </span>
         </button>
-        <div className={`mt-1 rounded-lg p-2 ${openGroup === group ? "block" : "hidden"}`}>
+        <div
+          className={`app-sidebar-group__content rounded-[1.05rem] p-2 ${
+            expanded
+              ? "app-sidebar-group__panel block"
+              : !compact
+                ? "app-sidebar-group__panel hidden group-hover/sidebar-section:block"
+                : "hidden"
+          }`}
+        >
           <div className="flex flex-col gap-2 text-sm">{pages.map(renderPageLink)}</div>
         </div>
       </div>
@@ -133,18 +177,19 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="app-dashboard-sidebar">
-      <div className="app-dashboard-sidebar__inner border-r border-cyan-400/20 bg-[radial-gradient(120%_80%_at_0%_0%,#1b2d7a_0%,#101a4d_45%,#0a1235_100%)] p-3 text-white">
-        <div className="rounded-xl border border-white/15 bg-white/10 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-          <h2 className="text-base font-extrabold tracking-tight">Admin Panel</h2>
-          <p className="mt-0.5 text-[11px] text-slate-300">
-            {admin
-              ? `${admin.type === "consultant" ? "Consultant" : "Primary Admin"}: ${admin.name}`
-              : "Admin access"}
-          </p>
-        </div>
-
-        <nav className="mt-3 flex flex-col gap-1.5 text-sm font-semibold">
+    <aside
+      className="app-dashboard-sidebar"
+      data-sidebar-kind="admin"
+      data-collapsed={collapsed}
+      data-compact={compact}
+      data-hovered={hovered}
+      onMouseEnter={handlePointerEnter}
+      onMouseLeave={handlePointerLeave}
+      onFocusCapture={handleFocusCapture}
+      onBlurCapture={handleBlurCapture}
+    >
+      <div className="app-dashboard-sidebar__inner text-white">
+        <nav className="app-sidebar-nav mt-3 flex flex-col gap-1.5 text-sm font-semibold">
           {renderGroup("core")}
           {renderGroup("client")}
           {renderGroup("hr")}

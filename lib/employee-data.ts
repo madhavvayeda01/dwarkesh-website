@@ -6,6 +6,8 @@ const EMPLOYMENT_STATUS_VALUES = ["ACTIVE", "INACTIVE"] as const;
 type EmploymentStatusValue = (typeof EMPLOYMENT_STATUS_VALUES)[number];
 const EMPLOYEE_FILE_STATUS_VALUES = ["PENDING", "CREATED"] as const;
 type EmployeeFileStatusValue = (typeof EMPLOYEE_FILE_STATUS_VALUES)[number];
+const SHIFT_CATEGORY_VALUES = ["STAFF", "WORKER"] as const;
+type ShiftCategoryValue = (typeof SHIFT_CATEGORY_VALUES)[number];
 
 function readString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -59,6 +61,17 @@ export function normalizeEmployeeFileStatus(
     : fallback;
 }
 
+export function normalizeShiftCategory(
+  value: unknown,
+  fallback: ShiftCategoryValue = "WORKER"
+): ShiftCategoryValue {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toUpperCase();
+  return SHIFT_CATEGORY_VALUES.includes(normalized as ShiftCategoryValue)
+    ? (normalized as ShiftCategoryValue)
+    : fallback;
+}
+
 export function buildEmployeeCreateData(
   body: InputBody,
   clientId: string
@@ -83,6 +96,7 @@ export function buildEmployeeCreateData(
     fullName,
     employmentStatus: normalizeEmploymentStatus(body.employmentStatus),
     employeeFileStatus: normalizeEmployeeFileStatus(body.employeeFileStatus),
+    shiftCategory: normalizeShiftCategory(body.shiftCategory),
 
     designation: pick(body, "designation"),
     currentDept: pick(body, "currentDept"),
@@ -170,6 +184,13 @@ export function buildEmployeeUpdateData(
       : rawEmployeeFileStatus === null
         ? "PENDING"
         : normalizeEmployeeFileStatus(rawEmployeeFileStatus);
+  const rawShiftCategory = body.shiftCategory;
+  const shiftCategory =
+    rawShiftCategory === undefined
+      ? undefined
+      : rawShiftCategory === null
+        ? "WORKER"
+        : normalizeShiftCategory(rawShiftCategory);
 
   return {
     empNo,
@@ -184,6 +205,7 @@ export function buildEmployeeUpdateData(
     fullName,
     employmentStatus,
     employeeFileStatus,
+    shiftCategory,
 
     designation: pickForUpdate(body, "designation"),
     currentDept: pickForUpdate(body, "currentDept"),

@@ -14,6 +14,41 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const { searchParams } = new URL(req.url);
+  const format = searchParams.get("format");
+
+  if (format === "csv") {
+    try {
+      const leads = await prisma.lead.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+
+      const header = ["Full Name", "Company", "Email", "Phone", "Message", "Created At"];
+      const rows = leads.map((lead) => [
+        lead.fullName,
+        lead.companyName || "-",
+        lead.email || "-",
+        lead.phone,
+        (lead.message || "-").replace(/\n/g, " "),
+        lead.createdAt.toISOString(),
+      ]);
+
+      const csv = [header, ...rows]
+        .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      return new Response(csv, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="enquiries_${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    } catch (err: any) {
+      logger.error("admin.lead.export.error", { message: err?.message });
+      return fail(err?.message || "Failed to export leads", 500);
+    }
+  }
+
   const parsed = pagingSchema.safeParse({
     page: searchParams.get("page") || "1",
     pageSize: searchParams.get("pageSize") || "10",

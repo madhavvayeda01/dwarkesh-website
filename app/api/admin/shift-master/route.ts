@@ -1,8 +1,9 @@
 import { WeekendType } from "@prisma/client";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
+import { normalizeShiftMasterConfigInput } from "@/lib/shift-master-service";
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -25,9 +26,6 @@ const upsertSchema = z.object({
   shiftCStart: z.string().regex(timeRegex),
   shiftCEnd: z.string().regex(timeRegex),
   weekendType: z.nativeEnum(WeekendType),
-}).refine((data) => data.generalShiftEnabled || data.shiftAEnabled || data.shiftBEnabled || data.shiftCEnabled, {
-  message: "Enable at least one shift",
-  path: ["generalShiftEnabled"],
 });
 
 function toTimeDate(value: string): Date {
@@ -41,7 +39,7 @@ function toHHMM(value: Date): string {
 }
 
 export async function GET(req: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdminPage("shift_master");
   if (error) return error;
 
   const url = new URL(req.url);
@@ -55,13 +53,32 @@ export async function GET(req: Request) {
   });
 
   if (!config) {
-    return ok("Shift config not found", { config: null });
+    return ok("Shift config fetched", {
+      config: {
+        clientId: parsed.data.clientId,
+        generalShiftEnabled: true,
+        generalShiftStart: "09:00",
+        generalShiftEnd: "17:00",
+        shiftAEnabled: true,
+        shiftAStart: "08:00",
+        shiftAEnd: "16:00",
+        shiftBEnabled: true,
+        shiftBStart: "16:00",
+        shiftBEnd: "00:00",
+        shiftCEnabled: true,
+        shiftCStart: "00:00",
+        shiftCEnd: "08:00",
+        weekendType: "SUN" as const,
+        updatedAt: null,
+      },
+      warnings: ["No saved Shift Master config found. Showing defaults."],
+    });
   }
 
   return ok("Shift config fetched", {
     config: {
       clientId: config.clientId,
-      generalShiftEnabled: config.generalShiftEnabled,
+      generalShiftEnabled: true,
       generalShiftStart: toHHMM(config.generalShiftStart),
       generalShiftEnd: toHHMM(config.generalShiftEnd),
       shiftAEnabled: config.shiftAEnabled,
@@ -80,11 +97,12 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdminPage("shift_master");
   if (error) return error;
 
   const parsed = upsertSchema.safeParse(await req.json());
   if (!parsed.success) return fail("Invalid payload", 400, parsed.error.flatten());
+  const normalized = normalizeShiftMasterConfigInput(parsed.data);
 
   const client = await prisma.client.findUnique({
     where: { id: parsed.data.clientId },
@@ -93,37 +111,37 @@ export async function PUT(req: Request) {
   if (!client) return fail("Client not found", 404);
 
   const saved = await prisma.clientShiftConfig.upsert({
-    where: { clientId: parsed.data.clientId },
+    where: { clientId: normalized.clientId },
     create: {
-      clientId: parsed.data.clientId,
-      generalShiftEnabled: parsed.data.generalShiftEnabled,
-      generalShiftStart: toTimeDate(parsed.data.generalShiftStart),
-      generalShiftEnd: toTimeDate(parsed.data.generalShiftEnd),
-      shiftAEnabled: parsed.data.shiftAEnabled,
-      shiftAStart: toTimeDate(parsed.data.shiftAStart),
-      shiftAEnd: toTimeDate(parsed.data.shiftAEnd),
-      shiftBEnabled: parsed.data.shiftBEnabled,
-      shiftBStart: toTimeDate(parsed.data.shiftBStart),
-      shiftBEnd: toTimeDate(parsed.data.shiftBEnd),
-      shiftCEnabled: parsed.data.shiftCEnabled,
-      shiftCStart: toTimeDate(parsed.data.shiftCStart),
-      shiftCEnd: toTimeDate(parsed.data.shiftCEnd),
-      weekendType: parsed.data.weekendType,
+      clientId: normalized.clientId,
+      generalShiftEnabled: normalized.generalShiftEnabled,
+      generalShiftStart: toTimeDate(normalized.generalShiftStart),
+      generalShiftEnd: toTimeDate(normalized.generalShiftEnd),
+      shiftAEnabled: normalized.shiftAEnabled,
+      shiftAStart: toTimeDate(normalized.shiftAStart),
+      shiftAEnd: toTimeDate(normalized.shiftAEnd),
+      shiftBEnabled: normalized.shiftBEnabled,
+      shiftBStart: toTimeDate(normalized.shiftBStart),
+      shiftBEnd: toTimeDate(normalized.shiftBEnd),
+      shiftCEnabled: normalized.shiftCEnabled,
+      shiftCStart: toTimeDate(normalized.shiftCStart),
+      shiftCEnd: toTimeDate(normalized.shiftCEnd),
+      weekendType: normalized.weekendType,
     },
     update: {
-      generalShiftEnabled: parsed.data.generalShiftEnabled,
-      generalShiftStart: toTimeDate(parsed.data.generalShiftStart),
-      generalShiftEnd: toTimeDate(parsed.data.generalShiftEnd),
-      shiftAEnabled: parsed.data.shiftAEnabled,
-      shiftAStart: toTimeDate(parsed.data.shiftAStart),
-      shiftAEnd: toTimeDate(parsed.data.shiftAEnd),
-      shiftBEnabled: parsed.data.shiftBEnabled,
-      shiftBStart: toTimeDate(parsed.data.shiftBStart),
-      shiftBEnd: toTimeDate(parsed.data.shiftBEnd),
-      shiftCEnabled: parsed.data.shiftCEnabled,
-      shiftCStart: toTimeDate(parsed.data.shiftCStart),
-      shiftCEnd: toTimeDate(parsed.data.shiftCEnd),
-      weekendType: parsed.data.weekendType,
+      generalShiftEnabled: normalized.generalShiftEnabled,
+      generalShiftStart: toTimeDate(normalized.generalShiftStart),
+      generalShiftEnd: toTimeDate(normalized.generalShiftEnd),
+      shiftAEnabled: normalized.shiftAEnabled,
+      shiftAStart: toTimeDate(normalized.shiftAStart),
+      shiftAEnd: toTimeDate(normalized.shiftAEnd),
+      shiftBEnabled: normalized.shiftBEnabled,
+      shiftBStart: toTimeDate(normalized.shiftBStart),
+      shiftBEnd: toTimeDate(normalized.shiftBEnd),
+      shiftCEnabled: normalized.shiftCEnabled,
+      shiftCStart: toTimeDate(normalized.shiftCStart),
+      shiftCEnd: toTimeDate(normalized.shiftCEnd),
+      weekendType: normalized.weekendType,
     },
   });
 
@@ -145,5 +163,6 @@ export async function PUT(req: Request) {
       weekendType: saved.weekendType,
       updatedAt: saved.updatedAt,
     },
+    warnings: normalized.warnings,
   });
 }

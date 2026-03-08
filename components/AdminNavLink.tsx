@@ -25,7 +25,7 @@ export default function AdminNavLink() {
 
   return (
     <a
-      className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+      className="app-header-control"
       href="/admin"
     >
       Admin

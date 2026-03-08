@@ -2,7 +2,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
-import { CLIENT_PAGE_DEFINITIONS, CLIENT_PAGE_KEYS, type ClientPageKey, type ModuleKey } from "@/lib/module-config";
+import { CLIENT_PAGE_DEFINITIONS, CLIENT_PAGE_KEYS, type ClientPageKey } from "@/lib/module-config";
 import {
   getClientModuleAccess,
   getStoredClientPageAccess,

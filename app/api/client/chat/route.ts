@@ -2,6 +2,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
 import { addMessage, getMessages } from "@/lib/chat-store";
+import { markClientChatThreadRead } from "@/lib/notification-feed";
 
 const sendSchema = z.object({
   text: z.string().trim().min(1),
@@ -12,6 +13,7 @@ export async function GET() {
   if (error || !session) return error;
   if (!session.clientId) return fail("Unauthorized", 401);
 
+  await markClientChatThreadRead(session);
   const messages = await getMessages(session.clientId);
   return ok("Chat messages fetched", { messages });
 }

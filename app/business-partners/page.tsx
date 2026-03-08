@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";

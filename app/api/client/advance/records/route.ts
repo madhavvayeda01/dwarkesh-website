@@ -1,6 +1,4 @@
 import { z } from "zod";
-import fs from "node:fs/promises";
-import path from "node:path";
 import * as XLSX from "xlsx";
 import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
@@ -9,6 +7,7 @@ import {
   listSupabaseFilesByPrefix,
   uploadBufferToSupabase,
 } from "@/lib/storage";
+import { loadAdvanceSource } from "@/lib/advance-source";
 
 const rowSchema = z.object({
   empNo: z.string(),
@@ -70,20 +69,6 @@ const HEADERS = [
   "Bank Name",
 ];
 
-async function readFileBytes(fileUrl: string): Promise<Uint8Array> {
-  if (/^https?:\/\//i.test(fileUrl)) {
-    const res = await fetch(fileUrl);
-    if (!res.ok) {
-      throw new Error("Failed to read advance file from storage");
-    }
-    return new Uint8Array(await res.arrayBuffer());
-  }
-
-  const normalized = fileUrl.replace(/^\/+/, "");
-  const absolute = path.join(process.cwd(), "public", normalized);
-  return new Uint8Array(await fs.readFile(absolute));
-}
-
 function toSafeNumber(value: unknown): number {
   const num = Number(String(value ?? "").replace(/,/g, "").trim());
   if (!Number.isFinite(num) || num < 0) return 0;
@@ -110,46 +95,38 @@ export async function GET(req: Request) {
   }
 
   if (parsed.data.month !== undefined && parsed.data.year !== undefined) {
-    const monthLabel = MONTHS[parsed.data.month];
-    const safeMonth = monthLabel.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const pattern = `advance_${safeMonth}_${parsed.data.year}_`;
-    const candidate = listed.files.find((file) => file.name.startsWith(pattern));
-    if (!candidate) {
+    const source = await loadAdvanceSource(clientId, parsed.data.month, parsed.data.year);
+    if (!source.debug.fileName) {
       return ok("No advance file for period", {
         month: parsed.data.month,
         year: parsed.data.year,
         fileName: null,
         rows: [],
+        warnings: source.debug.warnings,
       });
     }
 
     try {
-      const bytes = await readFileBytes(candidate.fileUrl);
-      const wb = XLSX.read(bytes, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {
-        defval: "",
-        range: 2,
-      }) as Record<string, unknown>[];
-
-      const parsedRows = rows.map((row) => ({
-        empNo: String(row["Emp No"] ?? "").trim(),
-        name: String(row["Name"] ?? "").trim(),
-        department: String(row["Department"] ?? "").trim(),
-        designation: String(row["Designation"] ?? "").trim(),
-        rateOfPay: toSafeNumber(row["Rate of pay"]),
-        presentDay: toSafeNumber(row["Present day"] ?? row["Present Day"]),
-        advance: toSafeNumber(row["Advance"]),
-        accountNo: String(row["Account No."] ?? "").trim(),
-        ifsc: String(row["IFSC"] ?? "").trim(),
-        bankName: String(row["Bank Name"] ?? "").trim(),
-      }));
-
       return ok("Advance file loaded", {
         month: parsed.data.month,
         year: parsed.data.year,
-        fileName: candidate.name,
-        rows: parsedRows,
+        fileName: source.debug.fileName,
+        updatedAt: source.debug.updatedAt,
+        parsedRows: source.debug.parsedRows,
+        uniqueCodes: source.debug.uniqueCodes,
+        warnings: source.debug.warnings,
+        rows: source.rows.map((row) => ({
+          empNo: row.empNo,
+          name: row.name,
+          department: row.department,
+          designation: row.designation,
+          rateOfPay: toSafeNumber(row.rateOfPay),
+          presentDay: toSafeNumber(row.presentDay),
+          advance: toSafeNumber(row.advance),
+          accountNo: row.accountNo,
+          ifsc: row.ifsc,
+          bankName: row.bankName,
+        })),
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to parse advance file";

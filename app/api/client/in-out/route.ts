@@ -10,6 +10,10 @@ import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
 import { listSupabaseFilesByPrefix } from "@/lib/storage";
 import { normalizeEmployeeCode } from "@/lib/employee-code";
+import {
+  generateInOutForClient,
+  previewInOutGenerator,
+} from "@/lib/shift-master-service";
 
 const requestSchema = z.object({
   month: z.number().int().min(1).max(12),
@@ -55,40 +59,6 @@ type ShiftConfigMap = {
 
 function toIsoDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function parseFlexibleDate(value?: string | null): Date | null {
-  if (!value) return null;
-  const text = value.trim();
-  if (!text) return null;
-
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (iso) {
-    const date = new Date(`${text}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  const dmy = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(text);
-  if (dmy) {
-    const [, dd, mm, yyyy] = dmy;
-    const date = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  const fallback = new Date(text);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
-}
-
-function sanitizeHolidayList(values: string[]): Set<string> {
-  const set = new Set<string>();
-  values.forEach((raw) => {
-    const text = raw.trim();
-    if (!text) return;
-    const parsed = parseFlexibleDate(text);
-    if (!parsed) return;
-    set.add(toIsoDateOnly(parsed));
-  });
-  return set;
 }
 
 async function loadClientHolidaySet(clientId: string, year: number): Promise<Set<string>> {
@@ -346,193 +316,22 @@ export async function POST(req: Request) {
   if (!parsed.success) return fail("Invalid payload", 400, parsed.error.flatten());
 
   const { month, year } = parsed.data;
-  const holidays = await loadClientHolidaySet(session.clientId, year);
-  const { daysInMonth } = getMonthRange(month, year);
-  const shiftConfigRaw = await prisma.clientShiftConfig.findUnique({
-    where: { clientId: session.clientId },
-    select: {
-      generalShiftEnabled: true,
-      generalShiftStart: true,
-      generalShiftEnd: true,
-      shiftAEnabled: true,
-      shiftAStart: true,
-      shiftAEnd: true,
-      shiftBEnabled: true,
-      shiftBStart: true,
-      shiftBEnd: true,
-      shiftCEnabled: true,
-      shiftCStart: true,
-      shiftCEnd: true,
-      weekendType: true,
-    },
-  });
-
-  if (!shiftConfigRaw) {
-    return fail("Shift timing not configured for this client", 400);
-  }
-
-  const shiftConfig: ShiftConfigMap = {
-    weekendType: shiftConfigRaw.weekendType,
-    enabledShifts: ([] as ShiftKey[])
-      .concat(shiftConfigRaw.generalShiftEnabled ? ["G"] : [])
-      .concat(shiftConfigRaw.shiftAEnabled ? ["A"] : [])
-      .concat(shiftConfigRaw.shiftBEnabled ? ["B"] : [])
-      .concat(shiftConfigRaw.shiftCEnabled ? ["C"] : []),
-    shifts: {
-      G: {
-        start: timeToMinutes(shiftConfigRaw.generalShiftStart),
-        end: timeToMinutes(shiftConfigRaw.generalShiftEnd),
-      },
-      A: {
-        start: timeToMinutes(shiftConfigRaw.shiftAStart),
-        end: timeToMinutes(shiftConfigRaw.shiftAEnd),
-      },
-      B: {
-        start: timeToMinutes(shiftConfigRaw.shiftBStart),
-        end: timeToMinutes(shiftConfigRaw.shiftBEnd),
-      },
-      C: {
-        start: timeToMinutes(shiftConfigRaw.shiftCStart),
-        end: timeToMinutes(shiftConfigRaw.shiftCEnd),
-      },
-    },
-  };
-
-  if (shiftConfig.enabledShifts.length === 0) {
-    return fail("No shift is enabled for this client", 400);
-  }
-
-  const employees = await prisma.employee.findMany({
-    where: { clientId: session.clientId },
-    select: { id: true, empNo: true },
-  });
-
-  const eligible = employees;
-  if (eligible.length === 0) {
-    return fail("No employees available for the selected month and year.", 400);
-  }
-
-  const employeeIds = eligible.map((employee) => employee.id);
-  const existing = await prisma.$queryRaw<AttendanceRow[]>`
-    SELECT "employeeId", "date", "inTime", "outTime"
-    FROM "Attendance"
-    WHERE "employeeId" IN (${Prisma.join(employeeIds)})
-      AND "month" = ${month}
-      AND "year" = ${year}
-  `;
-  const existingKeys = new Set(
-    existing.map((record) => `${record.employeeId}|${toIsoDateOnly(record.date)}`)
-  );
-
-  const createRows: Array<{
-    employeeId: string;
-    date: Date;
-    status: string;
-    inTime: string | null;
-    outTime: string | null;
-    breakMinutes: number;
-    workHours: number;
-    otHours: number;
-    month: number;
-    year: number;
-  }> = [];
-
-  const payrollPayDays = await loadPayrollPayDaysMap(session.clientId, month, year);
-
-  for (const employee of eligible) {
-    const empCode = normalizeEmployeeCode(employee.empNo || "");
-    const targetPresentDays = payrollPayDays.get(empCode);
-    const presentSet = buildPresentSet(
-      employee.id,
-      month,
-      year,
-      daysInMonth,
-      holidays,
-      shiftConfig.weekendType,
-      targetPresentDays ?? daysInMonth
-    );
-    const employeeShift = selectEmployeeShift(employee.id, shiftConfig.enabledShifts);
-
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(year, month - 1, day);
-      const key = `${employee.id}|${toIsoDateOnly(date)}`;
-      if (existingKeys.has(key)) continue;
-
-      const dayIsOff = isWeeklyOff(employee.id, date, shiftConfig.weekendType);
-      const dayIsHoliday = holidays.has(toIsoDateOnly(date));
-      const shouldBePresent = presentSet.has(day);
-      const generated =
-        !dayIsOff && !dayIsHoliday && shouldBePresent
-          ? {
-              ...generateAttendance(
-              employee.id,
-              date,
-              holidays,
-              shiftConfig.weekendType,
-              shiftConfig.shifts[employeeShift]
-            ),
-              shiftCode: employeeShift,
-            }
-          : {
-              date,
-              shiftCode: employeeShift,
-              inTime: null,
-              outTime: null,
-              breakMinutes: 0,
-              workHours: 0,
-              otHours: 0,
-            };
-      const status = generated.inTime && generated.outTime ? "P" : dayIsHoliday ? "PL" : dayIsOff ? "WO" : "A";
-
-      createRows.push({
-        employeeId: employee.id,
-        date,
-        status,
-        inTime: generated.inTime,
-        outTime: generated.outTime,
-        breakMinutes: generated.breakMinutes,
-        workHours: generated.workHours,
-        otHours: generated.otHours,
-        month,
-        year,
-      });
-    }
-  }
-
-  if (createRows.length > 0) {
-    await prisma.$transaction(
-      createRows.map((row) =>
-        prisma.$executeRaw`
-          INSERT INTO "Attendance"
-            ("id", "employeeId", "date", "status", "inTime", "outTime", "breakMinutes", "workHours", "otHours", "month", "year", "createdAt")
-          VALUES
-            (${randomUUID()}, ${row.employeeId}, ${row.date}, ${row.status}, ${row.inTime}, ${row.outTime}, ${row.breakMinutes}, ${row.workHours}, ${row.otHours}, ${row.month}, ${row.year}, ${new Date()})
-          ON CONFLICT ("employeeId","date") DO UPDATE
-          SET
-            "status" = EXCLUDED."status",
-            "inTime" = EXCLUDED."inTime",
-            "outTime" = EXCLUDED."outTime",
-            "breakMinutes" = EXCLUDED."breakMinutes",
-            "workHours" = EXCLUDED."workHours",
-            "otHours" = EXCLUDED."otHours",
-            "month" = EXCLUDED."month",
-            "year" = EXCLUDED."year"
-        `
-      )
+  const result = await generateInOutForClient(session.clientId, month, year);
+  if ("error" in result) {
+    return fail(
+      String(result.error || "Generation failed"),
+      400,
+      "missingEmployeePayroll" in result
+        ? { missingEmployeePayroll: result.missingEmployeePayroll || [] }
+        : null
     );
   }
 
   return ok(
-    createRows.length > 0
-      ? "Attendance generated successfully."
-      : "Attendance already exists. Nothing regenerated.",
-    {
-      employees: eligible.length,
-      month,
-      year,
-      inserted: createRows.length,
-      existing: existing.length,
-    }
+    result.partialSuccess
+      ? "Attendance generated with partial success. Some employees failed."
+      : "Attendance generated successfully.",
+    result
   );
 }
 
@@ -573,6 +372,19 @@ export async function GET(req: Request) {
     .concat(shiftConfigRaw?.shiftCEnabled ? ["C"] : []);
   const safeEnabledShifts: ShiftKey[] =
     enabledShifts.length > 0 ? enabledShifts : (["G"] as ShiftKey[]);
+
+  const preview = await previewInOutGenerator(session.clientId, month, year);
+  const shiftByEmployeeId = new Map<string, string>();
+  if (!("error" in preview)) {
+    const assignedRows = preview.employees as Array<{
+      employeeId: string;
+      assignedShift?: string;
+      shift?: string;
+    }>;
+    for (const employee of assignedRows) {
+      shiftByEmployeeId.set(employee.employeeId, employee.assignedShift || employee.shift || "G");
+    }
+  }
 
   const employees = await prisma.employee.findMany({
     where: { clientId: session.clientId },
@@ -629,8 +441,8 @@ export async function GET(req: Request) {
 
       if (status === "P") p += 1;
       else if (status === "A") a += 1;
-      else if (status === "W") w += 1;
-      else if (status === "H") h += 1;
+      else if (status === "W" || status === "WO") w += 1;
+      else if (status === "H" || status === "PL") h += 1;
 
       totalWorkHours += Number(record?.workHours || 0);
       totalOtHours += Number(record?.otHours || 0);
@@ -638,7 +450,7 @@ export async function GET(req: Request) {
       return {
         day,
         status,
-        shift: selectEmployeeShift(employee.id, safeEnabledShifts),
+        shift: shiftByEmployeeId.get(employee.id) || selectEmployeeShift(employee.id, safeEnabledShifts),
         inTime,
         outTime,
       };

@@ -13,7 +13,7 @@ export default function PrimaryNavLinks() {
     return (
       <Link
         href="/client-dashboard"
-        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+        className="app-header-control"
       >
         Home
       </Link>
@@ -26,35 +26,35 @@ export default function PrimaryNavLinks() {
     <>
       <Link
         href="/vision-mission"
-        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+        className="app-header-control"
       >
         Vision & Mission
       </Link>
 
       <Link
         href="/services"
-        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+        className="app-header-control"
       >
         Products & Services
       </Link>
 
       <Link
         href="/business-partners"
-        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+        className="app-header-control"
       >
         Business Partners
       </Link>
 
       <Link
         href="/enquire-now"
-        className="rounded-lg bg-amber-400 px-4 py-2 font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+        className="app-header-control app-header-control--accent"
       >
         Enquire Now
       </Link>
 
       <Link
         href="/book-consultation"
-        className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+        className="app-header-control"
       >
         Book Consultation
       </Link>

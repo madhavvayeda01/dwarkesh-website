@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 
 type Thread = {
@@ -17,22 +18,22 @@ type Message = {
 };
 
 export default function AdminClientConnectPage() {
+  const searchParams = useSearchParams();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [status, setStatus] = useState("");
 
-  async function loadThreads() {
+  const loadThreads = useCallback(async () => {
     const res = await fetch("/api/admin/client-connect", { cache: "no-store" });
     const data = await res.json();
     const payload = data?.data ?? data;
     const nextThreads: Thread[] = payload.threads || [];
+    const requestedClientId = searchParams.get("clientId") || "";
     setThreads(nextThreads);
-    if (!selectedClientId && nextThreads.length > 0) {
-      setSelectedClientId(nextThreads[0].client.id);
-    }
-  }
+    setSelectedClientId((current) => current || requestedClientId || nextThreads[0]?.client.id || "");
+  }, [searchParams]);
 
   async function loadMessages(clientId: string) {
     const res = await fetch(`/api/admin/client-connect?clientId=${clientId}`, {
@@ -55,7 +56,7 @@ export default function AdminClientConnectPage() {
       await loadThreads();
     }
     checkLoginAndLoad();
-  }, []);
+  }, [loadThreads]);
 
   useEffect(() => {
     if (!selectedClientId) return;

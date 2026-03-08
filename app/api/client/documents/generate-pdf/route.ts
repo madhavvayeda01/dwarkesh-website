@@ -10,10 +10,11 @@ import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { buildPersonalFileTemplateData } from "@/lib/personal-file-placeholders";
 import { launchPdfBrowser } from "@/lib/pdf-browser";
+import { readJsonOrFormData } from "@/lib/request-body";
 
 const generateSchema = z.object({
-  templateId: z.string().trim().min(1),
-  empCode: z.string().trim().min(1),
+  templateId: z.coerce.string().trim().min(1),
+  empCode: z.coerce.string().trim().min(1),
 });
 
 function sanitizeDocxXml(xml: string): string {
@@ -143,7 +144,7 @@ export async function POST(req: Request) {
   if (error || !session) return error;
 
   try {
-    const parsed = generateSchema.safeParse(await req.json());
+    const parsed = generateSchema.safeParse(await readJsonOrFormData(req));
     if (!parsed.success) {
       return fail("Invalid payload", 400, parsed.error.flatten());
     }

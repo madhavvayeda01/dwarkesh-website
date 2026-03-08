@@ -167,7 +167,8 @@ export async function listSupabaseFilesByPrefix(
   }
 > {
   const safePrefix = normalizePrefix(toSafeObjectPath(prefix));
-  const localFiles = await listLocalFilesByPrefix(safePrefix);
+  const includeLocalFiles = !USE_SUPABASE || !requiresPersistentStorage();
+  const localFiles = includeLocalFiles ? await listLocalFilesByPrefix(safePrefix) : [];
 
   const configError = getStorageConfigError();
   if (configError) {
@@ -208,20 +209,26 @@ export async function listSupabaseFilesByPrefix(
       updatedAt: entry.updated_at || null,
     }));
 
-  const merged = new Map<string, { name: string; fileUrl: string; updatedAt: string | null }>();
-  for (const file of localFiles) {
-    merged.set(file.name, file);
-  }
-  for (const file of remoteFiles) {
-    merged.set(file.name, file);
-  }
-
-  const files = Array.from(merged.values()).sort((a, b) => {
-    if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
-    if (a.updatedAt) return -1;
-    if (b.updatedAt) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const files = includeLocalFiles
+    ? (() => {
+        const merged = new Map<
+          string,
+          { name: string; fileUrl: string; updatedAt: string | null }
+        >();
+        for (const file of localFiles) {
+          merged.set(file.name, file);
+        }
+        for (const file of remoteFiles) {
+          merged.set(file.name, file);
+        }
+        return Array.from(merged.values()).sort((a, b) => {
+          if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
+          if (a.updatedAt) return -1;
+          if (b.updatedAt) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      })()
+    : remoteFiles;
 
   return { ok: true, files };
 }
@@ -258,6 +265,9 @@ export async function deleteObjectByPath(
   });
 
   if (!res.ok) {
+    if (res.status === 404) {
+      return { ok: true };
+    }
     const text = await res.text();
     return { ok: false, error: `Delete failed: ${text}` };
   }

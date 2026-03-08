@@ -1,12 +1,14 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
 type OptionItem = {
   id: string;
   name: string;
 };
+
+type OptionType = "parameter" | "document" | "floor";
 
 type ProgramAudit = {
   id: string;
@@ -17,14 +19,6 @@ type ProgramAudit = {
   createdAt: string;
   updatedAt: string;
 };
-
-const OPTION_TYPES = {
-  parameter: "parameter",
-  document: "document",
-  floor: "floor",
-} as const;
-
-type OptionType = keyof typeof OPTION_TYPES;
 
 async function readJsonSafe(res: Response) {
   try {
@@ -600,13 +594,6 @@ export default function ProgramAuditPage() {
       </main>
     </div>
   );
-}
-
-function renderSelectedNames(selectedIds: string[], options: OptionItem[]) {
-  const byId = new Map(options.map((item) => [item.id, item.name]));
-  const names = selectedIds.map((id) => byId.get(id)).filter(Boolean);
-  if (!names.length) return "-";
-  return names.join(", ");
 }
 
 function splitDocumentEntries(rawNames: string[]): string[] {

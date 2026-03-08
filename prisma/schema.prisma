@@ -26,6 +26,10 @@ model Consultant {
   pageAccess Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  ownedAuditSchedules      AuditSchedule[]     @relation("AuditScheduleOwner")
+  createdAuditSchedules    AuditSchedule[]     @relation("AuditScheduleCreator")
+  uploadedAuditAttachments AuditAttachment[]   @relation("AuditAttachmentUploader")
 }
 
 model Client {
@@ -51,6 +55,8 @@ model Client {
   complianceScheduleTemplates ComplianceScheduleTemplate[]
   complianceScheduleEvents ComplianceScheduleEvent[]
   complianceNotifications ComplianceNotification[]
+  auditSchedules AuditSchedule[]
+  chatThreadReadStates ChatThreadReadState[]
 }
 
 model Employee {
@@ -73,6 +79,7 @@ model Employee {
   fullName           String?
   employmentStatus   EmployeeStatus @default(ACTIVE)
   employeeFileStatus EmployeeFileStatus @default(PENDING)
+  shiftCategory      EmployeeShiftCategory @default(WORKER)
 
   designation  String?
   currentDept  String?
@@ -130,6 +137,7 @@ model Employee {
 
   @@index([clientId])
   @@index([clientId, employmentStatus])
+  @@index([clientId, shiftCategory])
 }
 
 model Attendance {
@@ -208,7 +216,130 @@ model ProgramAudit {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  auditSchedules    AuditSchedule[]
+
   @@index([name])
+}
+
+model AuditSchedule {
+  id                    String              @id @default(cuid())
+  clientId              String
+  client                Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  programAuditId        String?
+  programAudit          ProgramAudit?       @relation(fields: [programAuditId], references: [id], onDelete: SetNull)
+  title                 String
+  description           String?
+  status                AuditScheduleStatus @default(DRAFT)
+  priority              AuditPriority       @default(MEDIUM)
+  mode                  AuditMode           @default(ONSITE)
+  location              String?
+  scheduledStartAt      DateTime
+  scheduledEndAt        DateTime?
+  ownerConsultantId     String?
+  ownerConsultant       Consultant?         @relation("AuditScheduleOwner", fields: [ownerConsultantId], references: [id], onDelete: SetNull)
+  createdByAdminType    AuditActorType
+  createdByConsultantId String?
+  createdByConsultant   Consultant?         @relation("AuditScheduleCreator", fields: [createdByConsultantId], references: [id], onDelete: SetNull)
+  createdByNameSnapshot String?
+  followUpAt            DateTime?
+  internalNotes         String?
+  outcomeSummary        String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  visits          AuditVisit[]
+  checklistItems  AuditChecklistItem[]
+  attachments     AuditAttachment[]
+  reminderNotices AuditReminderNotice[]
+
+  @@index([clientId, scheduledStartAt])
+  @@index([status, scheduledStartAt])
+  @@index([ownerConsultantId, scheduledStartAt])
+  @@index([programAuditId])
+}
+
+model AuditVisit {
+  id             String          @id @default(cuid())
+  auditScheduleId String
+  auditSchedule  AuditSchedule   @relation(fields: [auditScheduleId], references: [id], onDelete: Cascade)
+  title          String
+  purpose        String?
+  plannedStartAt DateTime
+  plannedEndAt   DateTime?
+  location       String?
+  contactPerson  String?
+  status         AuditVisitStatus @default(PLANNED)
+  notes          String?
+  outcome        String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  attachments     AuditAttachment[]
+  checklistItems  AuditChecklistItem[]
+  reminderNotices AuditReminderNotice[]
+
+  @@index([auditScheduleId, plannedStartAt])
+  @@index([status, plannedStartAt])
+}
+
+model AuditChecklistItem {
+  id             String               @id @default(cuid())
+  auditScheduleId String
+  auditSchedule  AuditSchedule        @relation(fields: [auditScheduleId], references: [id], onDelete: Cascade)
+  visitId        String?
+  visit          AuditVisit?          @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  source         AuditChecklistSource
+  label          String
+  details        String?
+  sortOrder      Int                  @default(0)
+  completed      Boolean              @default(false)
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([auditScheduleId, sortOrder])
+  @@index([visitId])
+  @@index([completed])
+}
+
+model AuditAttachment {
+  id                    String          @id @default(cuid())
+  auditScheduleId       String
+  auditSchedule         AuditSchedule   @relation(fields: [auditScheduleId], references: [id], onDelete: Cascade)
+  visitId               String?
+  visit                 AuditVisit?     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  fileName              String
+  fileUrl               String
+  filePath              String
+  uploadedByAdminType   AuditActorType
+  uploadedByConsultantId String?
+  uploadedByConsultant  Consultant?     @relation("AuditAttachmentUploader", fields: [uploadedByConsultantId], references: [id], onDelete: SetNull)
+  createdAt             DateTime        @default(now())
+
+  @@index([auditScheduleId, createdAt])
+  @@index([visitId, createdAt])
+}
+
+model AuditReminderNotice {
+  id             String                    @id @default(cuid())
+  auditScheduleId String
+  auditSchedule  AuditSchedule             @relation(fields: [auditScheduleId], references: [id], onDelete: Cascade)
+  visitId        String?
+  visit          AuditVisit?               @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  kind           AuditReminderKind
+  title          String
+  message        String
+  notifyAt       DateTime
+  emailTo        String[]                  @default([])
+  emailStatus    AuditReminderEmailStatus  @default(PENDING)
+  emailError     String?
+  emailSentAt    DateTime?
+  createdAt      DateTime                  @default(now())
+
+  @@index([auditScheduleId, notifyAt])
+  @@index([visitId, notifyAt])
+  @@index([emailStatus, notifyAt])
 }
 
 model ModuleControl {
@@ -308,6 +439,21 @@ model ClientChatMessage {
   @@index([clientId, createdAt])
 }
 
+model ChatThreadReadState {
+  id            String                    @id @default(cuid())
+  recipientType NotificationRecipientType
+  recipientId   String
+  clientId      String
+  client        Client                    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lastReadAt    DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@unique([recipientType, recipientId, clientId])
+  @@index([recipientType, recipientId, lastReadAt])
+  @@index([clientId, lastReadAt])
+}
+
 model ComplianceLegalDocument {
   id         String   @id @default(cuid())
   clientId   String
@@ -374,6 +520,21 @@ model ComplianceNotification {
   @@index([clientId, audience, createdAt])
 }
 
+model NotificationReadState {
+  id            String                    @id @default(cuid())
+  recipientType NotificationRecipientType
+  recipientId   String
+  sourceType    NotificationSourceType
+  sourceId      String
+  readAt        DateTime                  @default(now())
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@unique([recipientType, recipientId, sourceType, sourceId])
+  @@index([recipientType, recipientId, readAt])
+  @@index([sourceType, sourceId])
+}
+
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
@@ -382,6 +543,11 @@ enum EmployeeStatus {
 enum EmployeeFileStatus {
   PENDING
   CREATED
+}
+
+enum EmployeeShiftCategory {
+  STAFF
+  WORKER
 }
 
 enum ChatSender {
@@ -410,4 +576,74 @@ enum ComplianceDocumentStatus {
   ACTIVE
   NOT_APPLICABLE
   NOT_AVAILABLE
+}
+
+enum NotificationRecipientType {
+  ADMIN
+  CLIENT
+}
+
+enum NotificationSourceType {
+  COMPLIANCE
+  AUDIT
+}
+
+enum AuditActorType {
+  ENV_ADMIN
+  CONSULTANT
+}
+
+enum AuditScheduleStatus {
+  DRAFT
+  SCHEDULED
+  VISIT_PLANNED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+  OVERDUE
+}
+
+enum AuditVisitStatus {
+  PLANNED
+  DONE
+  MISSED
+  RESCHEDULED
+  CANCELLED
+}
+
+enum AuditPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AuditMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum AuditChecklistSource {
+  PARAMETER
+  DOCUMENT
+  FLOOR
+  MANUAL
+}
+
+enum AuditReminderKind {
+  AUDIT_24H
+  AUDIT_2H
+  VISIT_24H
+  VISIT_2H
+  AUDIT_OVERDUE
+  VISIT_OVERDUE
+}
+
+enum AuditReminderEmailStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { addMessage, getMessages, listClientIdsWithChat } from "@/lib/chat-store";
+import { markAdminChatThreadRead } from "@/lib/notification-feed";
 
 const sendSchema = z.object({
   clientId: z.string().trim().min(1),
@@ -14,8 +15,8 @@ const querySchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const { error, session } = await requireAdmin();
+  if (error || !session) return error;
 
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({
@@ -27,6 +28,7 @@ export async function GET(req: Request) {
 
   const clientId = parsed.data.clientId?.trim();
   if (clientId) {
+    await markAdminChatThreadRead(session, clientId);
     const messages = await getMessages(clientId);
     return ok("Client chat fetched", { messages });
   }

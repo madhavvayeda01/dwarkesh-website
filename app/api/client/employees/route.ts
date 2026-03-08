@@ -10,6 +10,7 @@ const createEmployeeSchema = z.object({
   fullName: z.string().trim().min(1),
   employmentStatus: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   employeeFileStatus: z.enum(["PENDING", "CREATED"]).optional(),
+  shiftCategory: z.enum(["STAFF", "WORKER"]).optional(),
   empNo: z.string().trim().optional(),
   fileNo: z.string().trim().optional(),
   pfNo: z.string().trim().optional(),
@@ -36,24 +37,64 @@ function sanitizeHashOnlyStrings<T extends Record<string, unknown>>(row: T): T {
   return Object.fromEntries(entries) as T;
 }
 
+function inferShiftCategoryFromEmployment(
+  typeOfEmployment: string | null | undefined
+): "STAFF" | "WORKER" {
+  const normalized = String(typeOfEmployment || "").toLowerCase();
+  return normalized.includes("staff") ? "STAFF" : "WORKER";
+}
+
+function isMissingShiftCategoryColumnError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const message = (err as { message?: unknown }).message;
+  if (typeof message !== "string") return false;
+  return (
+    message.includes('The column `Employee.shiftCategory` does not exist') ||
+    message.includes("Employee.shiftCategory")
+  );
+}
+
 export async function GET() {
   const { error, session } = await requireClientModule("employees");
   if (error || !session) return error;
 
   try {
-    const employees = await prisma.employee.findMany({
-      where: { clientId: session.clientId },
-      orderBy: { createdAt: "desc" },
-    });
+    let employees: Array<Record<string, unknown>> = [];
+    try {
+      employees = (await prisma.employee.findMany({
+        where: { clientId: session.clientId },
+        orderBy: { createdAt: "desc" },
+      })) as unknown as Array<Record<string, unknown>>;
+    } catch (innerErr: unknown) {
+      if (!isMissingShiftCategoryColumnError(innerErr)) throw innerErr;
+      logger.warn("employee.list.legacy_schema_fallback", {
+        clientId: session.clientId,
+        reason: "Missing Employee.shiftCategory column",
+      });
+      employees = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        'SELECT * FROM "Employee" WHERE "clientId" = $1 ORDER BY "createdAt" DESC',
+        session.clientId
+      );
+    }
 
     logger.info("employee.list.success", {
       clientId: session.clientId,
       count: employees.length,
       repairedDateRows: employees.filter((employee) => {
-        const nextDob = normalizeStoredDateMaybe(employee.dob);
-        const nextDoj = normalizeStoredDateMaybe(employee.doj);
-        const nextDor = normalizeStoredDateMaybe(employee.dor);
-        return nextDob !== employee.dob || nextDoj !== employee.doj || nextDor !== employee.dor;
+        const nextDob = normalizeStoredDateMaybe(
+          employee.dob ? String(employee.dob) : null
+        );
+        const nextDoj = normalizeStoredDateMaybe(
+          employee.doj ? String(employee.doj) : null
+        );
+        const nextDor = normalizeStoredDateMaybe(
+          employee.dor ? String(employee.dor) : null
+        );
+        return (
+          nextDob !== (employee.dob ?? null) ||
+          nextDoj !== (employee.doj ?? null) ||
+          nextDor !== (employee.dor ?? null)
+        );
       }).length,
     });
 
@@ -63,9 +104,23 @@ export async function GET() {
         employees: employees.map((employee) =>
           sanitizeHashOnlyStrings({
             ...employee,
-            dob: normalizeStoredDateMaybe(employee.dob),
-            doj: normalizeStoredDateMaybe(employee.doj),
-            dor: normalizeStoredDateMaybe(employee.dor),
+            shiftCategory:
+              typeof employee.shiftCategory === "string"
+                ? employee.shiftCategory
+                : inferShiftCategoryFromEmployment(
+                    typeof employee.typeOfEmployment === "string"
+                      ? employee.typeOfEmployment
+                      : null
+                  ),
+            dob: normalizeStoredDateMaybe(
+              typeof employee.dob === "string" ? employee.dob : null
+            ),
+            doj: normalizeStoredDateMaybe(
+              typeof employee.doj === "string" ? employee.doj : null
+            ),
+            dor: normalizeStoredDateMaybe(
+              typeof employee.dor === "string" ? employee.dor : null
+            ),
           })
         ),
       }

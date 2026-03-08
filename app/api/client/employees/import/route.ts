@@ -7,7 +7,11 @@ import { requireClientModule } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { normalizeEmployeeCodeOrNull } from "@/lib/employee-code";
 import { normalizeImportedDate } from "@/lib/excel-date";
-import { normalizeEmployeeFileStatus, normalizeEmploymentStatus } from "@/lib/employee-data";
+import {
+  normalizeEmployeeFileStatus,
+  normalizeEmploymentStatus,
+  normalizeShiftCategory,
+} from "@/lib/employee-data";
 
 function clean(v: unknown): string | undefined {
   if (v === undefined || v === null) return undefined;
@@ -37,6 +41,13 @@ function normalizeUanNo(v: unknown): string | undefined {
 
   const digits = compact.replace(/\D/g, "");
   return digits || undefined;
+}
+
+function deriveShiftCategory(shiftCategoryRaw: unknown, typeOfEmploymentRaw: unknown) {
+  const fromInput = normalizeShiftCategory(shiftCategoryRaw, "WORKER");
+  if (typeof shiftCategoryRaw === "string" && shiftCategoryRaw.trim()) return fromInput;
+  const typeText = String(typeOfEmploymentRaw || "").trim().toLowerCase();
+  return typeText.includes("staff") ? "STAFF" : "WORKER";
 }
 
 const rowSchema = z.object({}).catchall(z.unknown());
@@ -92,6 +103,7 @@ export async function POST(req: Request) {
           "UNKNOWN",
         employmentStatus: normalizeEmploymentStatus(r["Status"]),
         employeeFileStatus: normalizeEmployeeFileStatus(r["Employee File Status"]),
+        shiftCategory: deriveShiftCategory(r["Shift Category"], r["Type of employment"]),
         designation: clean(r["Designation"]),
         currentDept: clean(r["Current Dept."]),
         salaryWage: clean(r["Salary/Wage"]),

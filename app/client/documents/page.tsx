@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadBlobFile,
+  isAndroidAppWebView,
+  startAndroidPostDownload,
+} from "@/lib/browser-download";
 
 type Template = {
   id: string;
@@ -83,6 +88,16 @@ export default function ClientDocumentsPage() {
     setStatus("Generating PDF...");
 
     try {
+      if (isAndroidAppWebView()) {
+        startAndroidPostDownload(
+          "/api/client/documents/generate-pdf",
+          { templateId, empCode: empCode.trim() },
+          (message) => setStatus(message)
+        );
+        setStatus("PDF generation started. Check your downloads.");
+        return;
+      }
+
       const res = await fetch("/api/client/documents/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,27 +107,18 @@ export default function ClientDocumentsPage() {
       if (!res.ok) {
         const err = await res.json();
         setStatus(err.message || "Failed to generate PDF.");
-        setGenerating(false);
         return;
       }
 
       const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${empCode.trim()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlobFile(blob, `${empCode.trim()}.pdf`);
 
       setStatus("PDF downloaded successfully.");
     } catch {
       setStatus("Server error while generating PDF.");
+    } finally {
+      setGenerating(false);
     }
-
-    setGenerating(false);
   }
 
   return (

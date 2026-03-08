@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadResponseBlob,
+  isAndroidAppWebView,
+  startAndroidPostDownload,
+} from "@/lib/browser-download";
 
 export default function ClientPfChallanPage() {
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
@@ -43,6 +48,16 @@ export default function ClientPfChallanPage() {
   async function generatePfFile() {
     setStatus("Generating PF challan file...");
     try {
+      if (isAndroidAppWebView()) {
+        startAndroidPostDownload(
+          "/api/client/pf-challan",
+          { month, year },
+          (message) => setStatus(message)
+        );
+        setStatus("PF challan download started.");
+        return;
+      }
+
       const res = await fetch("/api/client/pf-challan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,16 +70,7 @@ export default function ClientPfChallanPage() {
         return;
       }
 
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const fileNameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
-      const fileName = fileNameMatch?.[1] || `pf_ecr_${year}_${month + 1}.txt`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadResponseBlob(res, `pf_ecr_${year}_${month + 1}.txt`);
       setStatus("PF challan file generated.");
     } catch {
       setStatus("Failed to generate PF challan file.");

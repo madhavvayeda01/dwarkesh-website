@@ -34,7 +34,6 @@ type AdvanceRow = {
 
 type ImportedAdvanceOverrides = {
   presentDay?: number;
-  rateOfPay?: number;
   name?: string;
   department?: string;
   designation?: string;
@@ -78,7 +77,7 @@ function buildRows(employees: Array<{
     const normalizedCode = normalizeEmployeeCode(empNo) || "";
     const imported = importedByCode?.get(normalizedCode);
     const presentDay = imported?.presentDay ?? 0;
-    const rateOfPay = imported?.rateOfPay ?? toNumber(employee.salaryWage, 0);
+    const rateOfPay = toNumber(employee.salaryWage, 0);
     const advance = roundUp(rateOfPay * presentDay);
     return {
       id: employee.id,
@@ -195,10 +194,6 @@ export async function POST(req: Request) {
         row["Present Day"] ??
         row["presentDay"] ??
         row["Present"];
-      const rateOfPayCell =
-        row["Rate of pay"] ??
-        row["Rate Of Pay"] ??
-        row["rateOfPay"];
 
       const code = normalizeEmployeeCode(codeCell ? String(codeCell) : "");
       if (!code) continue;
@@ -208,10 +203,6 @@ export async function POST(req: Request) {
           String(row["Department"] ?? row["department"] ?? "").trim() || undefined,
         designation:
           String(row["Designation"] ?? row["designation"] ?? "").trim() || undefined,
-        rateOfPay:
-          rateOfPayCell === undefined || rateOfPayCell === null || String(rateOfPayCell).trim() === ""
-            ? undefined
-            : toSafeNumber(rateOfPayCell),
         presentDay: toSafeNumber(presentDayCell),
         accountNo:
           String(row["Account No."] ?? row["Account No"] ?? row["accountNo"] ?? "").trim() ||

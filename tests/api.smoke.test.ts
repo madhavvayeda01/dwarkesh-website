@@ -11,6 +11,7 @@ smokeDescribe("API smoke tests", () => {
 
   adminDescribe("admin auth", () => {
     const agent = request.agent(baseUrl);
+    let createdClientId = "";
 
     it("logs in with admin credentials", async () => {
       const res = await agent.post("/api/auth/login").send({
@@ -29,6 +30,41 @@ smokeDescribe("API smoke tests", () => {
       expect(res.status).toBe(200);
       expect(res.body?.success).toBe(true);
       expect(typeof res.body?.data?.consultantCount).toBe("number");
+    });
+
+    it("force-enables G shift in shift master config", async () => {
+      const suffix = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const createClient = await agent.post("/api/admin/clients").send({
+        name: `Shift Test ${suffix}`,
+        email: `shift_test_${suffix}@example.com`,
+        password: "test123",
+      });
+
+      expect(createClient.status).toBe(201);
+      createdClientId = createClient.body?.data?.client?.id || "";
+      expect(typeof createdClientId).toBe("string");
+      expect(createdClientId.length).toBeGreaterThan(0);
+
+      const saveConfig = await agent.put("/api/admin/shift-master").send({
+        clientId: createdClientId,
+        generalShiftEnabled: false,
+        generalShiftStart: "09:00",
+        generalShiftEnd: "17:00",
+        shiftAEnabled: true,
+        shiftAStart: "08:00",
+        shiftAEnd: "16:00",
+        shiftBEnabled: true,
+        shiftBStart: "16:00",
+        shiftBEnd: "00:00",
+        shiftCEnabled: true,
+        shiftCStart: "00:00",
+        shiftCEnd: "08:00",
+        weekendType: "SUN",
+      });
+
+      expect(saveConfig.status).toBe(200);
+      expect(saveConfig.body?.success).toBe(true);
+      expect(saveConfig.body?.data?.config?.generalShiftEnabled).toBe(true);
     });
   });
 

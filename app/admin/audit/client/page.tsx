@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
 type Client = {
@@ -47,7 +47,7 @@ export default function AdminAuditPage() {
     init();
   }, []);
 
-  async function loadFiles(selectedClientId = clientId) {
+  const loadFiles = useCallback(async (selectedClientId = clientId) => {
     if (!selectedClientId) return;
     setLoadingFiles(true);
     const res = await fetch(`/api/admin/audit-files?clientId=${selectedClientId}`, {
@@ -57,7 +57,7 @@ export default function AdminAuditPage() {
     const payload = data?.data ?? data;
     setFiles(payload.files || []);
     setLoadingFiles(false);
-  }
+  }, [clientId]);
 
   useEffect(() => {
     if (!clientId) {
@@ -65,7 +65,7 @@ export default function AdminAuditPage() {
       return;
     }
     loadFiles(clientId);
-  }, [clientId]);
+  }, [clientId, loadFiles]);
 
   async function handleUpload() {
     if (!clientId) {

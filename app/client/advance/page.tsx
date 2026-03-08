@@ -1,8 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadResponseBlob,
+  isAndroidAppWebView,
+  startAndroidGetDownload,
+} from "@/lib/browser-download";
 import { normalizeEmployeeCode } from "@/lib/employee-code";
+import { useClientPageAccess } from "@/lib/use-client-page-access";
+
+const MONTH_OPTIONS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 type Employee = {
   id: string;
@@ -118,7 +139,6 @@ function mergeSavedRows(employees: Employee[], savedRows: SavedAdvanceRow[]): Ad
       name: saved.name || baseRow.name,
       department: saved.department || baseRow.department,
       designation: saved.designation || baseRow.designation,
-      rateOfPay: Number.isFinite(saved.rateOfPay) ? saved.rateOfPay : baseRow.rateOfPay,
       presentDay: Number.isFinite(saved.presentDay) ? saved.presentDay : 0,
       accountNo: saved.accountNo || baseRow.accountNo,
       ifsc: saved.ifsc || baseRow.ifsc,
@@ -128,6 +148,7 @@ function mergeSavedRows(employees: Employee[], savedRows: SavedAdvanceRow[]): Ad
 }
 
 export default function ClientAdvancePage() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<AdvanceRow[]>([]);
@@ -142,24 +163,11 @@ export default function ClientAdvancePage() {
   const now = new Date();
   const [advanceMonth, setAdvanceMonth] = useState(now.getMonth());
   const [advanceYear, setAdvanceYear] = useState(now.getFullYear());
+  const { moduleEnabled: accessEnabled, loading: accessLoading } = useClientPageAccess({
+    pageKey: "advance",
+  });
 
   useEffect(() => {
-    async function checkLogin() {
-      const res = await fetch("/api/client/me");
-      const data = await res.json();
-      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
-      if (!loggedIn) window.location.href = "/signin";
-      const accessRes = await fetch("/api/client/modules?page=advance", { cache: "no-store" });
-      const accessData = await accessRes.json().catch(() => ({}));
-      if (accessRes.ok && accessData?.data?.enabled === false) {
-        setModuleEnabled(false);
-        setLoading(false);
-        return false;
-      }
-      setModuleEnabled(true);
-      return true;
-    }
-
     async function loadEmployees() {
       setLoading(true);
       const res = await fetch("/api/client/employees", { cache: "no-store" });
@@ -172,13 +180,19 @@ export default function ClientAdvancePage() {
     }
 
     async function init() {
-      const canLoad = await checkLogin();
-      if (!canLoad) return;
+      if (accessEnabled !== true) return;
+      setModuleEnabled(true);
       await loadEmployees();
     }
 
-    init();
-  }, []);
+    if (accessEnabled === false) {
+      setModuleEnabled(false);
+      setLoading(false);
+      return;
+    }
+    if (accessLoading) return;
+    void init();
+  }, [accessEnabled, accessLoading]);
 
   useEffect(() => {
     async function loadSavedAdvance() {
@@ -205,13 +219,13 @@ export default function ClientAdvancePage() {
 
       setRows(mergeSavedRows(employees, savedRows));
       if (!importFile) {
-        const monthLabel = monthOptions[advanceMonth];
+        const monthLabel = MONTH_OPTIONS[advanceMonth];
         setStatus(`Loaded saved advance for ${monthLabel} ${advanceYear}.`);
       }
     }
 
     loadSavedAdvance();
-  }, [advanceMonth, advanceYear, employees, moduleEnabled]);
+  }, [advanceMonth, advanceYear, employees, moduleEnabled, importFile]);
 
   function updatePresentDay(id: string, value: number) {
     const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -229,16 +243,16 @@ export default function ClientAdvancePage() {
     [rows]
   );
 
-  function displayValue(row: AdvanceComputedRow, key: AdvanceColumnKey): string {
+  const displayValue = useCallback((row: AdvanceComputedRow, key: AdvanceColumnKey): string => {
     if (key === "rateOfPay") return money(row.rateOfPay);
     if (key === "advance") return money(row.advance);
     if (key === "presentDay") return row.presentDay.toFixed(2);
     return String(row[key] || "");
-  }
+  }, []);
 
-  function comparableValue(row: AdvanceComputedRow, key: AdvanceColumnKey): string {
+  const comparableValue = useCallback((row: AdvanceComputedRow, key: AdvanceColumnKey): string => {
     return displayValue(row, key).toLowerCase();
-  }
+  }, [displayValue]);
 
   const departmentOptions = useMemo(() => {
     const values = Array.from(
@@ -283,7 +297,7 @@ export default function ClientAdvancePage() {
       return empSortOrder === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [computed, globalSearch, departmentFilter, designationFilter, columnSearch, empSortOrder]);
+  }, [computed, globalSearch, departmentFilter, designationFilter, columnSearch, empSortOrder, comparableValue]);
 
   const grandTotal = useMemo(
     () =>
@@ -298,21 +312,6 @@ export default function ClientAdvancePage() {
       ),
     [filteredComputed]
   );
-
-  const monthOptions = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ] as const;
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -358,22 +357,22 @@ export default function ClientAdvancePage() {
   }
 
   async function exportAdvanceData() {
+    if (isAndroidAppWebView()) {
+      startAndroidGetDownload("/api/client/advance/data", (message) => setStatus(message));
+      setStatus("Advance data export started.");
+      return;
+    }
+
     const res = await fetch("/api/client/advance/data", { cache: "no-store" });
     if (!res.ok) {
       setStatus("Failed to export advance data.");
       return;
     }
 
-    const blob = await res.blob();
-    const disposition = res.headers.get("Content-Disposition") || "";
-    const fileNameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
-    const fileName = fileNameMatch?.[1] || `advance_data_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+    await downloadResponseBlob(
+      res,
+      `advance_data_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
     setStatus("Advance data exported.");
   }
 
@@ -429,6 +428,17 @@ export default function ClientAdvancePage() {
               <span className="font-semibold"> Rate of pay × Present day</span>.
             </p>
 
+            {(importFile || status) && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
+                {importFile && (
+                  <span className="rounded-full border border-slate-300 bg-white px-3 py-1">
+                    File: {importFile.name}
+                  </span>
+                )}
+                {status && <span>{status}</span>}
+              </div>
+            )}
+
             <div className="mt-5 flex flex-wrap items-end gap-4 rounded-2xl bg-white p-4 shadow">
               <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
                 Advance Month
@@ -437,7 +447,7 @@ export default function ClientAdvancePage() {
                   onChange={(e) => setAdvanceMonth(Number(e.target.value))}
                   className="rounded-xl border border-slate-300 px-3 py-2"
                 >
-                  {monthOptions.map((month, index) => (
+                  {MONTH_OPTIONS.map((month, index) => (
                     <option key={month} value={index}>
                       {month}
                     </option>
@@ -465,6 +475,39 @@ export default function ClientAdvancePage() {
                 className="rounded-2xl bg-emerald-600 px-5 py-2 font-semibold text-white hover:bg-emerald-500"
               >
                 Generate Advance
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={exportAdvanceData}
+                className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
+              >
+                Export Data
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                {importFile ? "Change File" : "Choose File"}
+              </button>
+
+              <button
+                type="button"
+                onClick={importAdvanceData}
+                disabled={!importFile}
+                className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                Import Data
               </button>
             </div>
 
@@ -523,31 +566,6 @@ export default function ClientAdvancePage() {
                 className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Reset
-              </button>
-            </div>
-
-            {status && <p className="mt-3 text-sm font-semibold text-slate-700">{status}</p>}
-
-            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow">
-              <button
-                onClick={exportAdvanceData}
-                className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
-              >
-                Employee data
-              </button>
-
-              <input
-                type="file"
-                accept=".csv,.xlsx"
-                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                className="w-full max-w-md rounded-xl border bg-white px-4 py-2 text-slate-900"
-              />
-
-              <button
-                onClick={importAdvanceData}
-                className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
-              >
-                Import Filled Data
               </button>
             </div>
 

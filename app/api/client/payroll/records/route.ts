@@ -2,8 +2,8 @@ import { z } from "zod";
 import * as XLSX from "xlsx";
 import { fail, ok } from "@/lib/api-response";
 import { requireClientModule } from "@/lib/auth-guards";
-import { prisma } from "@/lib/prisma";
 import { normalizeEmployeeCode } from "@/lib/employee-code";
+import { prisma } from "@/lib/prisma";
 import {
   deleteObjectByPath,
   listSupabaseFilesByPrefix,
@@ -20,6 +20,8 @@ const rowSchema = z.object({
   department: z.string(),
   designation: z.string(),
   doj: z.string(),
+  weeklyOff: z.string(),
+  monthlyCapDays: z.number(),
   payDays: z.number(),
   basic: z.number(),
   hra: z.number(),
@@ -29,6 +31,11 @@ const rowSchema = z.object({
   pf: z.number(),
   esic: z.number(),
   profTax: z.number(),
+  tds: z.number(),
+  loan: z.number(),
+  adv: z.number(),
+  tea: z.number(),
+  lwf: z.number(),
   totalDeduction: z.number(),
   netPayable: z.number(),
   signature: z.string(),
@@ -62,6 +69,8 @@ const HEADERS = [
   "Depart.",
   "Desig.",
   "DOJ",
+  "Weekly Off",
+  "Cap Days (Y)",
   "Pay Days",
   "Basic",
   "HRA",
@@ -71,6 +80,11 @@ const HEADERS = [
   "PF",
   "ESIC",
   "Prof Tax",
+  "TDS",
+  "Loan",
+  "Adv",
+  "Tea",
+  "LWF",
   "Total Deduction",
   "Net Payable",
   "SIGNATURE",
@@ -99,9 +113,8 @@ export async function GET() {
   const { error, session } = await requireClientModule("payroll");
   if (error || !session) return error;
   if (!session.clientId) return fail("Unauthorized", 401);
-  const clientId = session.clientId;
 
-  const prefix = `payroll-generated/${clientId}/`;
+  const prefix = `payroll-generated/${session.clientId}/`;
   const listed = await listSupabaseFilesByPrefix(prefix);
   if (!listed.ok) return fail(listed.error, 500);
 
@@ -112,13 +125,13 @@ export async function POST(req: Request) {
   const { error, session } = await requireClientModule("payroll");
   if (error || !session) return error;
   if (!session.clientId) return fail("Unauthorized", 401);
-  const clientId = session.clientId;
 
   const parsed = generateSchema.safeParse(await req.json());
   if (!parsed.success) {
     return fail("Invalid payroll payload", 400, parsed.error.flatten());
   }
 
+  const clientId = session.clientId;
   const monthLabel = MONTHS[parsed.data.month];
   const rows = parsed.data.rows.map((row) => [
     row.srNo,
@@ -129,6 +142,8 @@ export async function POST(req: Request) {
     row.department,
     row.designation,
     row.doj,
+    row.weeklyOff,
+    row.monthlyCapDays,
     row.payDays,
     row.basic,
     row.hra,
@@ -138,6 +153,11 @@ export async function POST(req: Request) {
     row.pf,
     row.esic,
     row.profTax,
+    row.tds,
+    row.loan,
+    row.adv,
+    row.tea,
+    row.lwf,
     row.totalDeduction,
     row.netPayable,
     row.signature,
@@ -147,10 +167,15 @@ export async function POST(req: Request) {
     row.totalFinal,
   ]);
 
-  const sheetData = [[`Payroll: ${monthLabel} ${parsed.data.year}`], [], HEADERS, ...rows];
+  const sheetData = [
+    [`Payroll: ${monthLabel} ${parsed.data.year}`],
+    [],
+    HEADERS,
+    ...rows,
+  ];
   const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-  const textCols = ["C", "D", "U"];
+  const textCols = ["C", "D", "AB"];
   for (let r = 4; r <= sheetData.length; r += 1) {
     for (const col of textCols) {
       const addr = `${col}${r}`;
@@ -187,16 +212,19 @@ export async function POST(req: Request) {
     if (key && !employeeByCode.has(key)) employeeByCode.set(key, employee.id);
   }
 
-  const dedupedPayrollByCode = new Map<string, {
-    clientId: string;
-    employeeId: string | null;
-    month: number;
-    year: number;
-    employeeCode: string;
-    employeeName: string | null;
-    payDays: number;
-    otHoursTarget: number;
-  }>();
+  const dedupedPayrollByCode = new Map<
+    string,
+    {
+      clientId: string;
+      employeeId: string | null;
+      month: number;
+      year: number;
+      employeeCode: string;
+      employeeName: string | null;
+      payDays: number;
+      otHoursTarget: number;
+    }
+  >();
   for (const row of parsed.data.rows) {
     const normalizedEmployeeId = (row.employeeId || "").trim();
     const normalizedCode =
@@ -252,14 +280,13 @@ export async function DELETE(req: Request) {
   const { error, session } = await requireClientModule("payroll");
   if (error || !session) return error;
   if (!session.clientId) return fail("Unauthorized", 401);
-  const clientId = session.clientId;
 
   const parsed = deleteSchema.safeParse(await req.json());
   if (!parsed.success) {
     return fail("Invalid delete payload", 400, parsed.error.flatten());
   }
 
-  const objectPath = `payroll-generated/${clientId}/${parsed.data.fileName}`;
+  const objectPath = `payroll-generated/${session.clientId}/${parsed.data.fileName}`;
   const deleted = await deleteObjectByPath(objectPath);
   if (!deleted.ok) return fail(deleted.error, 500);
 

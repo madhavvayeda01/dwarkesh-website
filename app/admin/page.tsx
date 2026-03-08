@@ -2,6 +2,7 @@
 
 import Sidebar from "@/components/Sidebar";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isAndroidAppWebView, startAndroidGetDownload } from "@/lib/browser-download";
 
 type Lead = {
   id: string;
@@ -116,6 +117,11 @@ export default function AdminPage() {
   }
 
   function exportCSV() {
+    if (isAndroidAppWebView()) {
+      startAndroidGetDownload("/api/admin/leads?format=csv");
+      return;
+    }
+
     const headers = ["Name", "Company", "Email", "Phone", "Message", "Date"];
 
     const rows = filteredLeads.map((l) => [

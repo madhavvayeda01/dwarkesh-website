@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import { downloadBlobFile, isAndroidAppWebView, startAndroidGetDownload } from "@/lib/browser-download";
 
 type PayslipFile = {
   name: string;
@@ -55,20 +56,19 @@ export default function ClientPayslipDataPage() {
 
   async function exportFile(fileUrl: string, fileName: string) {
     try {
+      if (isAndroidAppWebView()) {
+        startAndroidGetDownload(fileUrl, () => setStatus("Failed to export payslip file."));
+        setStatus("Payslip file export started.");
+        return;
+      }
+
       const res = await fetch(fileUrl);
       if (!res.ok) {
         setStatus("Failed to export payslip file.");
         return;
       }
       const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlobFile(blob, fileName);
       setStatus("Payslip file exported.");
     } catch {
       setStatus("Failed to export payslip file.");

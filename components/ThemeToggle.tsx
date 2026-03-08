@@ -44,7 +44,7 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 font-semibold text-white transition hover:bg-white/20"
+      className="app-header-control"
       title={!mounted ? "Theme" : mode === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
       aria-label={
         !mounted ? "Theme" : mode === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"

@@ -4,11 +4,36 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ClientSidebar from "@/components/ClientSidebar";
 import { normalizeEmployeeCode } from "@/lib/employee-code";
+import { useClientPageAccess } from "@/lib/use-client-page-access";
 
 type Employee = {
   id: string;
   empNo: string | null;
   fullName: string | null;
+};
+
+type ShiftPreviewRow = {
+  employeeId: string;
+  empCode: string;
+  employeeName: string;
+  payDays: number;
+  otHoursTarget: number;
+  gender: string | null;
+  shiftCategory: "STAFF" | "WORKER";
+  assignedShift: "G" | "A" | "B" | "C";
+  weeklyOff: string;
+};
+
+type ShiftPreviewConfig = {
+  weekendType: string;
+  shiftConfig?: {
+    shifts: {
+      G: { start: number; end: number };
+      A: { start: number; end: number };
+      B: { start: number; end: number };
+      C: { start: number; end: number };
+    };
+  };
 };
 
 type ShiftCode = "G" | "A" | "B" | "C";
@@ -50,11 +75,23 @@ function formatDuration(totalMinutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function formatShiftWindow(start: number, end: number) {
+  return `${formatHHMM(start)} - ${formatHHMM(end)}`;
+}
+
 export default function ClientInOutPage() {
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
+  const { moduleEnabled: accessEnabled, loading: accessLoading } = useClientPageAccess({
+    pageKey: "in_out",
+  });
+  const [activeTab, setActiveTab] = useState<"attendance" | "shift_master">("attendance");
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payDaysByCode, setPayDaysByCode] = useState<Record<string, number>>({});
+  const [shiftPreviewRows, setShiftPreviewRows] = useState<ShiftPreviewRow[]>([]);
+  const [shiftPreviewConfig, setShiftPreviewConfig] = useState<ShiftPreviewConfig | null>(null);
+  const [shiftPreviewWarnings, setShiftPreviewWarnings] = useState<string[]>([]);
+  const [loadingShiftPreview, setLoadingShiftPreview] = useState(false);
   const [status, setStatus] = useState("");
   const [generating, setGenerating] = useState(false);
   const today = new Date();
@@ -194,21 +231,12 @@ export default function ClientInOutPage() {
 
   useEffect(() => {
     async function init() {
-      const me = await fetch("/api/client/me");
-      const meData = await me.json();
-      const loggedIn = meData?.data?.loggedIn ?? meData?.loggedIn ?? false;
-      if (!loggedIn) {
-        window.location.href = "/signin";
-        return;
-      }
-
-      const accessRes = await fetch("/api/client/modules?page=in_out", { cache: "no-store" });
-      const accessData = await accessRes.json().catch(() => ({}));
-      if (accessRes.ok && accessData?.data?.enabled === false) {
+      if (accessEnabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return;
       }
+      if (accessEnabled !== true) return;
       setModuleEnabled(true);
 
       const res = await fetch("/api/client/employees", { cache: "no-store" });
@@ -219,8 +247,9 @@ export default function ClientInOutPage() {
       setLoading(false);
     }
 
-    init();
-  }, []);
+    if (accessLoading) return;
+    void init();
+  }, [accessEnabled, accessLoading]);
 
   useEffect(() => {
     if (moduleEnabled !== true) return;
@@ -243,6 +272,43 @@ export default function ClientInOutPage() {
     }
 
     loadPayrollPayDays();
+  }, [moduleEnabled, month, year]);
+
+  useEffect(() => {
+    if (moduleEnabled !== true) return;
+
+    async function loadShiftPreview() {
+      setLoadingShiftPreview(true);
+      try {
+        const res = await fetch(`/api/client/in-out/shift-preview?month=${month + 1}&year=${year}`, {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        const payload = data?.data ?? data;
+        if (!res.ok) {
+          setShiftPreviewRows([]);
+          setShiftPreviewConfig(null);
+          const message = data?.message || "Failed to load shift preview.";
+          setShiftPreviewWarnings(message ? [message] : []);
+          return;
+        }
+
+        setShiftPreviewRows((payload?.employees || []) as ShiftPreviewRow[]);
+        setShiftPreviewConfig({
+          weekendType: String(payload?.weekendType || ""),
+          shiftConfig: payload?.shiftConfig,
+        });
+        setShiftPreviewWarnings(Array.isArray(payload?.warnings) ? payload.warnings : []);
+      } catch {
+        setShiftPreviewRows([]);
+        setShiftPreviewConfig(null);
+        setShiftPreviewWarnings(["Failed to load shift preview."]);
+      } finally {
+        setLoadingShiftPreview(false);
+      }
+    }
+
+    loadShiftPreview();
   }, [moduleEnabled, month, year]);
 
   async function generateInOut() {
@@ -346,9 +412,36 @@ export default function ClientInOutPage() {
               </Link>
             </div>
 
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("attendance")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                  activeTab === "attendance"
+                    ? "bg-blue-900 text-white"
+                    : "bg-white text-slate-700 ring-1 ring-slate-300"
+                }`}
+              >
+                Attendance
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("shift_master")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                  activeTab === "shift_master"
+                    ? "bg-blue-900 text-white"
+                    : "bg-white text-slate-700 ring-1 ring-slate-300"
+                }`}
+              >
+                Shift Master
+              </button>
+            </div>
+
             {status && <p className="mt-3 text-sm font-semibold text-slate-700">{status}</p>}
 
-            <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+            {activeTab === "attendance" ? (
+              <>
+                <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
               <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                 <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">P - Present</span>
                 <span className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-rose-700">A - Absent</span>
@@ -531,6 +624,72 @@ export default function ClientInOutPage() {
                 </div>
               )}
             </div>
+              </>
+            ) : (
+              <div className="mt-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-lg font-bold text-blue-950">Shift Master Preview</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Read-only shift assignment preview for selected month and year.
+                </p>
+
+                {shiftPreviewConfig?.shiftConfig ? (
+                  <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 p-3 text-xs font-semibold text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                    <p>G: {formatShiftWindow(shiftPreviewConfig.shiftConfig.shifts.G.start, shiftPreviewConfig.shiftConfig.shifts.G.end)}</p>
+                    <p>A: {formatShiftWindow(shiftPreviewConfig.shiftConfig.shifts.A.start, shiftPreviewConfig.shiftConfig.shifts.A.end)}</p>
+                    <p>B: {formatShiftWindow(shiftPreviewConfig.shiftConfig.shifts.B.start, shiftPreviewConfig.shiftConfig.shifts.B.end)}</p>
+                    <p>C: {formatShiftWindow(shiftPreviewConfig.shiftConfig.shifts.C.start, shiftPreviewConfig.shiftConfig.shifts.C.end)}</p>
+                    <p className="sm:col-span-2 lg:col-span-4">
+                      Week Off Mode: {shiftPreviewConfig.weekendType || "-"}
+                    </p>
+                  </div>
+                ) : null}
+
+                {shiftPreviewWarnings.length > 0 ? (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                    {shiftPreviewWarnings.map((warning) => (
+                      <p key={warning}>{warning}</p>
+                    ))}
+                  </div>
+                ) : null}
+
+                {loadingShiftPreview ? (
+                  <p className="mt-3 text-sm text-slate-600">Loading shift preview...</p>
+                ) : shiftPreviewRows.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">No payroll mapped employees found.</p>
+                ) : (
+                  <div className="mt-3 overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[860px] text-sm">
+                      <thead className="bg-slate-100 text-left">
+                        <tr>
+                          <th className="border px-3 py-2">Emp Code</th>
+                          <th className="border px-3 py-2">Employee</th>
+                          <th className="border px-3 py-2">Gender</th>
+                          <th className="border px-3 py-2">Category</th>
+                          <th className="border px-3 py-2">Shift</th>
+                          <th className="border px-3 py-2">Weekly Off</th>
+                          <th className="border px-3 py-2">Pay Days</th>
+                          <th className="border px-3 py-2">OT Target</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {shiftPreviewRows.map((row) => (
+                          <tr key={row.employeeId}>
+                            <td className="border px-3 py-2">{row.empCode || "-"}</td>
+                            <td className="border px-3 py-2">{row.employeeName || "-"}</td>
+                            <td className="border px-3 py-2">{row.gender || "-"}</td>
+                            <td className="border px-3 py-2">{row.shiftCategory}</td>
+                            <td className="border px-3 py-2 font-bold text-blue-900">{row.assignedShift}</td>
+                            <td className="border px-3 py-2">{row.weeklyOff}</td>
+                            <td className="border px-3 py-2">{row.payDays}</td>
+                            <td className="border px-3 py-2">{row.otHoursTarget}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </main>

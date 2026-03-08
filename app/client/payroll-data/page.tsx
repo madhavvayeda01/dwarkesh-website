@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import { downloadBlobFile, isAndroidAppWebView, startAndroidGetDownload } from "@/lib/browser-download";
 
 type PayrollFile = {
   name: string;
@@ -48,20 +49,19 @@ export default function ClientPayrollDataPage() {
 
   async function exportFile(fileUrl: string, fileName: string) {
     try {
+      if (isAndroidAppWebView()) {
+        startAndroidGetDownload(fileUrl, () => setStatus("Failed to export payroll file."));
+        setStatus("Payroll file export started.");
+        return;
+      }
+
       const res = await fetch(fileUrl);
       if (!res.ok) {
         setStatus("Failed to export payroll file.");
         return;
       }
       const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlobFile(blob, fileName);
       setStatus("Payroll file exported.");
     } catch {
       setStatus("Failed to export payroll file.");

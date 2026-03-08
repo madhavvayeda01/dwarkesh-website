@@ -1,7 +1,13 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadBlobFile,
+  isAndroidAppWebView,
+  startAndroidGetDownload,
+} from "@/lib/browser-download";
+import { useClientPageAccess } from "@/lib/use-client-page-access";
 
 type Employee = {
   id: string;
@@ -18,6 +24,7 @@ type Employee = {
   fullName: string | null;
   employmentStatus: "ACTIVE" | "INACTIVE";
   employeeFileStatus: "PENDING" | "CREATED";
+  shiftCategory: "STAFF" | "WORKER";
 
   designation: string | null;
   currentDept: string | null;
@@ -91,6 +98,7 @@ const EMPLOYEE_COLUMNS: EmployeeColumn[] = [
   { key: "fullName", label: "Full Name" },
   { key: "employmentStatus", label: "Status" },
   { key: "employeeFileStatus", label: "Employee File" },
+  { key: "shiftCategory", label: "Shift Category" },
   { key: "designation", label: "Designation" },
   { key: "currentDept", label: "Dept" },
   { key: "salaryWage", label: "Salary/Wage" },
@@ -139,6 +147,7 @@ const CATEGORICAL_FILTER_FIELDS: FilterableEmployeeField[] = [
   "currentDept",
   "employmentStatus",
   "employeeFileStatus",
+  "shiftCategory",
   "designation",
   "gender",
   "maritalStatus",
@@ -159,6 +168,7 @@ const INITIAL_CATEGORICAL_FILTERS: Record<FilterableEmployeeField, string> = {
   fullName: "ALL",
   employmentStatus: "ALL",
   employeeFileStatus: "ALL",
+  shiftCategory: "ALL",
   designation: "ALL",
   currentDept: "ALL",
   salaryWage: "ALL",
@@ -224,6 +234,7 @@ const DEFAULT_CRITICAL_FIELDS: Record<FilterableEmployeeField, boolean> = {
   fullName: true,
   employmentStatus: false,
   employeeFileStatus: false,
+  shiftCategory: false,
   designation: true,
   currentDept: true,
   salaryWage: false,
@@ -438,17 +449,7 @@ async function readJsonSafe(res: Response) {
 }
 
 export default function ClientEmployeesPage() {
-  // 🔐 Client login check
-  useEffect(() => {
-    async function checkLogin() {
-      const res = await fetch("/api/client/me", { cache: "no-store" });
-      const data = await readJsonSafe(res);
-      const loggedIn = data?.data?.loggedIn ?? data?.loggedIn ?? false;
-      if (!loggedIn) window.location.href = "/signin";
-    }
-    checkLogin();
-  }, []);
-
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -468,6 +469,9 @@ export default function ClientEmployeesPage() {
   const [checkerOpen, setCheckerOpen] = useState(false);
   const [gapMode, setGapMode] = useState<GapMode>("full");
   const [criticalFields, setCriticalFields] = useState(DEFAULT_CRITICAL_FIELDS);
+  const { moduleEnabled: accessEnabled, loading: accessLoading } = useClientPageAccess({
+    pageKey: "employee_master",
+  });
   function formatUanNo(value: string | null): string {
     if (!value) return "-";
     const compact = value.trim().replace(/[\s,]/g, "");
@@ -497,7 +501,7 @@ export default function ClientEmployeesPage() {
     });
   }
 
-  async function fetchEmployees() {
+  const fetchEmployees = useCallback(async () => {
     setLoading(true);
     const res = await fetch("/api/client/employees", { cache: "no-store" });
     const data = await readJsonSafe(res);
@@ -508,38 +512,40 @@ export default function ClientEmployeesPage() {
       prev.filter((id) => nextEmployees.some((employee) => employee.id === id))
     );
     setLoading(false);
-  }
+  }, []);
 
+  // fetchEmployees is stable via useCallback; this effect should only initialize access + initial data.
   useEffect(() => {
     async function initEmployees() {
-      const accessRes = await fetch("/api/client/modules?page=employee_master", { cache: "no-store" });
-      const accessData = await accessRes.json().catch(() => ({}));
-      const enabled = accessRes.ok ? accessData?.data?.enabled !== false : true;
-      if (enabled === false) {
+      if (accessEnabled === false) {
         setModuleEnabled(false);
         setLoading(false);
         return;
       }
+      if (accessEnabled !== true) return;
       setModuleEnabled(true);
-      fetchEmployees();
+      await fetchEmployees();
     }
-    initEmployees();
-  }, []);
+    if (accessLoading) return;
+    void initEmployees();
+  }, [accessEnabled, accessLoading, fetchEmployees]);
 
   async function downloadEmployeeData() {
+    if (isAndroidAppWebView()) {
+      startAndroidGetDownload("/api/client/employees/export", () =>
+        setMsg("âŒ Failed to export employee data")
+      );
+      return;
+    }
+
     const res = await fetch("/api/client/employees/export", { cache: "no-store" });
     if (!res.ok) {
-      setMsg("❌ Failed to export employee data");
+      setMsg("âŒ Failed to export employee data");
       return;
     }
 
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `employee_master_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlobFile(blob, `employee_master_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function handleImport() {
@@ -561,14 +567,14 @@ export default function ClientEmployeesPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      setMsg(`❌ ${data.message || "Import failed"}`);
+      setMsg(`âŒ ${data.message || "Import failed"}`);
       return;
     }
 
     const payload = data?.data ?? data;
     const inserted = payload.inserted || 0;
     const replaced = payload.replaced || 0;
-    setMsg(`✅ Imported successfully! (${inserted} inserted, ${replaced} replaced)`);
+    setMsg(`âœ… Imported successfully! (${inserted} inserted, ${replaced} replaced)`);
     setFile(null);
     fetchEmployees();
   }
@@ -664,10 +670,10 @@ export default function ClientEmployeesPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMsg(`❌ ${data?.message || "Failed to update employee"}`);
+        setMsg(`âŒ ${data?.message || "Failed to update employee"}`);
         return;
       }
-      setMsg("✅ Employee updated successfully");
+      setMsg("âœ… Employee updated successfully");
       setEditingRowId(null);
       setEditDraft({});
       await fetchEmployees();
@@ -714,23 +720,23 @@ export default function ClientEmployeesPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setMsg(`❌ ${data?.message || "Failed to delete all employees"}`);
+        setMsg(`âŒ ${data?.message || "Failed to delete all employees"}`);
         return;
       }
 
       const payload = data?.data ?? data;
       const deleted = payload?.deleted ?? 0;
-      setMsg(`✅ Deleted ${deleted} employee records`);
+      setMsg(`âœ… Deleted ${deleted} employee records`);
       await fetchEmployees();
     } finally {
       setDeletingAll(false);
     }
   }
 
-  function getDisplayValue(employee: Employee, field: FilterableEmployeeField): string {
+  const getDisplayValue = useCallback((employee: Employee, field: FilterableEmployeeField): string => {
     if (field === "uanNo") return formatUanNo(employee.uanNo);
     return employee[field] || "-";
-  }
+  }, []);
 
   function renderStatusBadge(
     value: Employee["employmentStatus"] | Employee["employeeFileStatus"]
@@ -766,10 +772,10 @@ export default function ClientEmployeesPage() {
     );
   }
 
-  function getFilterComparableValue(employee: Employee, field: FilterableEmployeeField): string {
+  const getFilterComparableValue = useCallback((employee: Employee, field: FilterableEmployeeField): string => {
     const displayed = getDisplayValue(employee, field);
     return displayed === "-" ? "" : displayed.toLowerCase();
-  }
+  }, [getDisplayValue]);
 
   const categoricalOptions = useMemo(() => {
     const options = {} as Record<FilterableEmployeeField, string[]>;
@@ -828,7 +834,7 @@ export default function ClientEmployeesPage() {
       return empSortOrder === "asc" ? compared : -compared;
     });
     return sorted;
-  }, [employees, categoricalFilters, columnSearch, globalSearch, empSortOrder]);
+  }, [employees, categoricalFilters, columnSearch, globalSearch, empSortOrder, getFilterComparableValue]);
 
   const filteredEmployeeIds = useMemo(
     () => filteredEmployees.map((employee) => employee.id),
@@ -1216,7 +1222,7 @@ export default function ClientEmployeesPage() {
           </div>
         ) : (
           <>
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-blue-950">
               Employee Master
@@ -1224,9 +1230,45 @@ export default function ClientEmployeesPage() {
             <p className="mt-1 text-slate-600">
               Upload employee master Excel/CSV and view all records in one table.
             </p>
+            {(file || msg) && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
+                {file && (
+                  <span className="rounded-full border border-slate-300 bg-white px-3 py-1">
+                    File: {file.name}
+                  </span>
+                )}
+                {msg && <span>{msg}</span>}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              {file ? "Change File" : "Choose File"}
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={!file}
+              className="rounded-2xl bg-green-600 px-5 py-2 font-semibold text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
+            >
+              Import File
+            </button>
+            <button
+              onClick={downloadEmployeeData}
+              className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
+            >
+              Export Data
+            </button>
             <button
               onClick={fetchEmployees}
               className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
@@ -1243,40 +1285,8 @@ export default function ClientEmployeesPage() {
           </div>
         </div>
 
-        {/* IMPORT SECTION */}
-        <div className="mt-8 rounded-3xl bg-white p-6 shadow-md">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-xl font-bold text-blue-950">
-              Import Employee Master
-            </h2>
-
-            <button
-              onClick={downloadEmployeeData}
-              className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
-            >
-              Employee data
-            </button>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <input
-              type="file"
-              accept=".csv,.xlsx"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="w-full max-w-md rounded-xl border bg-white px-4 py-2 text-slate-900"
-            />
-
-            <button
-              onClick={handleImport}
-              className="rounded-2xl bg-green-600 px-6 py-2 font-semibold text-white hover:bg-green-500"
-            >Import File</button>
-          </div>
-
-          {msg && <p className="mt-3 text-sm font-semibold text-slate-700">{msg}</p>}
-        </div>
-
         {/* TABLE VIEW */}
-        <div className="mt-10 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
+        <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-blue-950">
               All Employees ({filteredEmployees.length}
@@ -1594,11 +1604,17 @@ export default function ClientEmployeesPage() {
                           }`}
                         >
                           {editingRowId === e.id ? (
-                            column.key === "employmentStatus" || column.key === "employeeFileStatus" ? (
+                            column.key === "employmentStatus" ||
+                            column.key === "employeeFileStatus" ||
+                            column.key === "shiftCategory" ? (
                               <select
                                 value={
                                   editDraft[column.key] ??
-                                  (column.key === "employmentStatus" ? "ACTIVE" : "PENDING")
+                                  (column.key === "employmentStatus"
+                                    ? "ACTIVE"
+                                    : column.key === "employeeFileStatus"
+                                      ? "PENDING"
+                                      : "WORKER")
                                 }
                                 onChange={(event) =>
                                   setEditDraft((prev) => ({
@@ -1613,10 +1629,15 @@ export default function ClientEmployeesPage() {
                                     <option value="ACTIVE">ACTIVE</option>
                                     <option value="INACTIVE">INACTIVE</option>
                                   </>
-                                ) : (
+                                ) : column.key === "employeeFileStatus" ? (
                                   <>
                                     <option value="PENDING">PENDING</option>
                                     <option value="CREATED">CREATED</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="STAFF">STAFF</option>
+                                    <option value="WORKER">WORKER</option>
                                   </>
                                 )}
                               </select>
@@ -2001,6 +2022,7 @@ export default function ClientEmployeesPage() {
     </div>
   );
 }
+
 
 
 

@@ -1,8 +1,15 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useState } from "react";
+import BrandedLoader from "@/components/BrandedLoader";
 import ClientSidebar from "@/components/ClientSidebar";
-import { CLIENT_PAGE_DEFINITIONS, DEFAULT_PAGE_ACCESS, type ClientPageKey, type PageAccessMap } from "@/lib/module-config";
+import {
+  CLIENT_PAGE_DEFINITIONS,
+  DEFAULT_PAGE_ACCESS,
+  type PageAccessMap,
+} from "@/lib/module-config";
+import { useClientPageAccess } from "@/lib/use-client-page-access";
 
 type Client = {
   id: string;
@@ -36,9 +43,7 @@ function initials(name: string | null | undefined) {
 }
 
 export default function ClientDashboardPage() {
-  const [client, setClient] = useState<Client | null>(null);
   const [pages, setPages] = useState<PageAccessMap>(DEFAULT_PAGE_ACCESS);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -49,45 +54,50 @@ export default function ClientDashboardPage() {
     contactNumber: "",
     logoUrl: "",
   });
+  const { client, loading, refresh } = useClientPageAccess({ refreshOnFocus: true });
 
   const enabledPages = useMemo(() => {
     return CLIENT_PAGE_DEFINITIONS.filter((page) => pages[page.key]);
   }, [pages]);
 
   useEffect(() => {
-    async function loadDashboard() {
-      const meRes = await fetch("/api/client/me", { cache: "no-store" });
-      const meData = await meRes.json().catch(() => ({}));
-      const mePayload = meData?.data ?? meData;
-      const loggedIn = mePayload?.loggedIn ?? false;
+    let cancelled = false;
 
-      if (!loggedIn) {
-        window.location.href = "/signin";
-        return;
-      }
-
-      const nextClient = mePayload?.client as Client | null;
-      if (nextClient) {
-        setClient(nextClient);
-        setForm({
-          name: nextClient.name || "",
-          address: nextClient.address || "",
-          contactNumber: nextClient.contactNumber || "",
-          logoUrl: nextClient.logoUrl || "",
-        });
-      }
-
+    async function refreshAccessSnapshot() {
       const modulesRes = await fetch("/api/client/modules", { cache: "no-store" });
       const modulesData = await modulesRes.json().catch(() => ({}));
-      if (modulesRes.ok) {
+      if (!cancelled && modulesRes.ok) {
         setPages({ ...DEFAULT_PAGE_ACCESS, ...(modulesData?.data?.pages || {}) });
       }
-
-      setLoading(false);
     }
 
-    loadDashboard();
+    function handleVisibilityRefresh() {
+      if (document.visibilityState === "visible") {
+        void refreshAccessSnapshot();
+      }
+    }
+
+    void refreshAccessSnapshot();
+
+    window.addEventListener("focus", handleVisibilityRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityRefresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleVisibilityRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!client) return;
+    setForm({
+      name: client.name || "",
+      address: client.address || "",
+      contactNumber: client.contactNumber || "",
+      logoUrl: client.logoUrl || "",
+    });
+  }, [client]);
 
   async function logout() {
     await fetch("/api/client/logout", { method: "POST" });
@@ -114,13 +124,13 @@ export default function ClientDashboardPage() {
 
     const nextClient = payload?.client as Client | undefined;
     if (nextClient) {
-      setClient(nextClient);
       setForm({
         name: nextClient.name || "",
         address: nextClient.address || "",
         contactNumber: nextClient.contactNumber || "",
         logoUrl: nextClient.logoUrl || "",
       });
+      await refresh();
     }
 
     setEditing(false);
@@ -161,12 +171,11 @@ export default function ClientDashboardPage() {
       <div className="flex min-h-screen bg-[linear-gradient(180deg,#dfe7f1_0%,#eef3f8_100%)]">
         <ClientSidebar />
         <main className="flex-1 p-8">
-          <div className="mx-auto max-w-7xl animate-pulse space-y-6">
-            <div className="h-52 rounded-[32px] bg-white/70 shadow" />
-            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="h-72 rounded-[32px] bg-white/70 shadow" />
-              <div className="h-72 rounded-[32px] bg-white/70 shadow" />
-            </div>
+          <div className="mx-auto max-w-7xl">
+            <BrandedLoader
+              title="Loading client dashboard"
+              subtitle="Fetching profile, page access, and current workspace state."
+            />
           </div>
         </main>
       </div>

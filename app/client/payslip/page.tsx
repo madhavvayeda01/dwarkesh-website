@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ClientSidebar from "@/components/ClientSidebar";
+import {
+  downloadBlobFile,
+  isAndroidAppWebView,
+  startAndroidGetDownload,
+} from "@/lib/browser-download";
 
 export default function ClientPayslipPage() {
   const [moduleEnabled, setModuleEnabled] = useState<boolean | null>(null);
@@ -66,17 +71,14 @@ export default function ClientPayslipPage() {
       }
 
       if (payload?.fileUrl && payload?.fileName) {
-        const downloadRes = await fetch(payload.fileUrl);
-        if (downloadRes.ok) {
-          const blob = await downloadRes.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = payload.fileName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
+        if (isAndroidAppWebView()) {
+          startAndroidGetDownload(payload.fileUrl);
+        } else {
+          const downloadRes = await fetch(payload.fileUrl);
+          if (downloadRes.ok) {
+            const blob = await downloadRes.blob();
+            downloadBlobFile(blob, payload.fileName);
+          }
         }
       }
 

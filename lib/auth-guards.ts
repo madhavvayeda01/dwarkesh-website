@@ -1,5 +1,7 @@
 import { fail } from "@/lib/api-response";
 import { getSessionFromCookies } from "@/lib/auth";
+import { isAdminPageEnabledForSession } from "@/lib/admin-access";
+import type { AdminPageKey } from "@/lib/admin-config";
 import { CLIENT_PAGE_BY_KEY } from "@/lib/module-config";
 import {
   isClientModuleEnabled,
@@ -14,6 +16,21 @@ export async function requireAdmin() {
     return { error: fail("Unauthorized", 401), session: null };
   }
   return { error: null, session };
+}
+
+export async function requireAdminPage(pageKey: AdminPageKey) {
+  const base = await requireAdmin();
+  if (base.error || !base.session) return base;
+
+  const enabled = await isAdminPageEnabledForSession(base.session, pageKey);
+  if (!enabled) {
+    return {
+      error: fail("Page not enabled by primary admin", 403, { page: pageKey }),
+      session: null,
+    };
+  }
+
+  return base;
 }
 
 export async function requireClient() {
