@@ -10,6 +10,9 @@ type Employee = {
   id: string;
   empNo: string | null;
   fullName: string | null;
+  currentDept?: string | null;
+  designation?: string | null;
+  employmentStatus?: string | null;
 };
 
 type ShiftPreviewRow = {
@@ -95,6 +98,13 @@ export default function ClientInOutPage() {
   const [loadingShiftPreview, setLoadingShiftPreview] = useState(false);
   const [status, setStatus] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [filters, setFilters] = useState({
+    empCode: "",
+    name: "",
+    dept: "",
+    designation: "",
+    status: "",
+  });
   const today = new Date();
   const [month, setMonth] = useState<number>(today.getMonth());
   const [year, setYear] = useState<number>(today.getFullYear());
@@ -136,8 +146,45 @@ export default function ClientInOutPage() {
     });
   }, [monthDays, month, year]);
 
+  const payrollEmployeeCodes = useMemo(() => {
+    return new Set([
+      ...Object.keys(payDaysByCode || {}),
+      ...Object.keys(otHoursByCode || {}),
+    ]);
+  }, [payDaysByCode, otHoursByCode]);
+
+  const payrollEmployees = useMemo(() => {
+    return employees.filter((employee) => {
+      const code = normalizeEmployeeCode(employee.empNo || "");
+      return Boolean(code && payrollEmployeeCodes.has(code));
+    });
+  }, [employees, payrollEmployeeCodes]);
+
+  const filteredPayrollEmployees = useMemo(() => {
+    const empCodeNeedle = filters.empCode.trim().toLowerCase();
+    const nameNeedle = filters.name.trim().toLowerCase();
+    const deptNeedle = filters.dept.trim().toLowerCase();
+    const designationNeedle = filters.designation.trim().toLowerCase();
+    const statusNeedle = filters.status.trim().toLowerCase();
+
+    return payrollEmployees.filter((employee) => {
+      const empCode = String(employee.empNo || "").toLowerCase();
+      const name = String(employee.fullName || "").toLowerCase();
+      const dept = String(employee.currentDept || "").toLowerCase();
+      const designation = String(employee.designation || "").toLowerCase();
+      const status = String(employee.employmentStatus || "").toLowerCase();
+
+      if (empCodeNeedle && !empCode.includes(empCodeNeedle)) return false;
+      if (nameNeedle && !name.includes(nameNeedle)) return false;
+      if (deptNeedle && !dept.includes(deptNeedle)) return false;
+      if (designationNeedle && !designation.includes(designationNeedle)) return false;
+      if (statusNeedle && !status.includes(statusNeedle)) return false;
+      return true;
+    });
+  }, [payrollEmployees, filters]);
+
   const computed = useMemo(() => {
-    return employees.map((employee, index) => {
+    return filteredPayrollEmployees.map((employee, index) => {
       const rand = rngFactory(makeSeed(`${employee.id}-${month}-${year}`));
       const shift = SHIFT_CODES[Math.floor(rand() * SHIFT_CODES.length)];
       const weeklyOff = WEEK_DAYS[Math.floor(rand() * WEEK_DAYS.length)];
@@ -245,7 +292,7 @@ export default function ClientInOutPage() {
         },
       };
     });
-  }, [employees, month, year, dayHeaders, payDaysByCode, otHoursByCode]);
+  }, [filteredPayrollEmployees, month, year, dayHeaders, payDaysByCode, otHoursByCode]);
 
   useEffect(() => {
     async function init() {
@@ -463,6 +510,43 @@ export default function ClientInOutPage() {
             {activeTab === "attendance" ? (
               <>
                 <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <input
+                      value={filters.empCode}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, empCode: e.target.value }))}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      placeholder="Filter Emp Code"
+                    />
+                    <input
+                      value={filters.name}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      placeholder="Filter Name"
+                    />
+                    <input
+                      value={filters.dept}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, dept: e.target.value }))}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      placeholder="Filter Department"
+                    />
+                    <input
+                      value={filters.designation}
+                      onChange={(e) =>
+                        setFilters((prev) => ({ ...prev, designation: e.target.value }))
+                      }
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      placeholder="Filter Designation"
+                    />
+                    <input
+                      value={filters.status}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      placeholder="Filter Status"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
               <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                 <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">P - Present</span>
                 <span className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-rose-700">A - Absent</span>
@@ -474,8 +558,10 @@ export default function ClientInOutPage() {
             <div className="mt-3 w-full max-w-full rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
               {loading ? (
                 <p className="text-slate-600">Fetching device data...</p>
-              ) : employees.length === 0 ? (
-                <p className="text-slate-600">No employees found.</p>
+              ) : payrollEmployees.length === 0 ? (
+                <p className="text-slate-600">No payroll-mapped employees found for selected month/year.</p>
+              ) : computed.length === 0 ? (
+                <p className="text-slate-600">No employees match current filters.</p>
               ) : (
                 <div className="w-full max-w-full overflow-x-auto rounded-xl border border-slate-200">
                   <table className="min-w-[1820px] w-full border-collapse text-[11px] text-slate-900">
