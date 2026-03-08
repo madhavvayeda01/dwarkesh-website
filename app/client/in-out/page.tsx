@@ -280,8 +280,23 @@ export default function ClientInOutPage() {
         ) : (
           <>
             <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-              <h1 className="text-2xl font-extrabold text-blue-950">IN-OUT</h1>
-              <p className="mt-1 text-sm text-slate-600">Monthly attendance processing dashboard.</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-blue-950">IN-OUT</h1>
+                  <p className="mt-1 text-sm text-slate-600">Monthly attendance processing dashboard.</p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm"
+                  aria-label="Machine Connected Online"
+                >
+                  <span className="relative inline-flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-600"></span>
+                  </span>
+                  <span className="animate-pulse">Machine Connected Online</span>
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
@@ -344,7 +359,7 @@ export default function ClientInOutPage() {
 
             <div className="mt-3 w-full max-w-full rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
               {loading ? (
-                <p className="text-slate-600">Loading employees...</p>
+                <p className="text-slate-600">Fetching device data...</p>
               ) : employees.length === 0 ? (
                 <p className="text-slate-600">No employees found.</p>
               ) : (
