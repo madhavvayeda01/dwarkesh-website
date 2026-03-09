@@ -67,6 +67,7 @@ export async function POST(req: Request) {
         adminType: "consultant",
         adminName: consultant.name,
         adminEmail: consultant.email,
+        sessionVersion: consultant.sessionVersion,
       });
       const res = ok("Login successful", {
         role: "admin",
@@ -104,7 +105,12 @@ export async function POST(req: Request) {
       return fail("Invalid username/email or password", 401);
     }
 
-    const token = signJwt({ sub: client.id, role: "client", clientId: client.id });
+    const token = signJwt({
+      sub: client.id,
+      role: "client",
+      clientId: client.id,
+      sessionVersion: client.sessionVersion,
+    });
     const res = ok("Login successful", {
       role: "client",
       clientId: client.id,

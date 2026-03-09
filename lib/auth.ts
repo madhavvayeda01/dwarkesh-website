@@ -8,6 +8,7 @@ export type SessionPayload = {
   sub: string;
   role: Role;
   clientId?: string;
+  sessionVersion?: number;
   impersonatedByAdmin?: boolean;
   adminId?: string;
   adminType?: "env_admin" | "consultant";
@@ -78,7 +79,32 @@ export function verifyJwt(token?: string): SessionPayload | null {
 export async function getSessionFromCookies() {
   const store = await cookies();
   const token = store.get(COOKIE_NAME)?.value;
-  return verifyJwt(token);
+  const payload = verifyJwt(token);
+  if (!payload) return null;
+
+  if (payload.role === "client" && payload.clientId) {
+    const { prisma } = await import("@/lib/prisma");
+    const client = await prisma.client.findUnique({
+      where: { id: payload.clientId },
+      select: { sessionVersion: true },
+    });
+    if (!client) return null;
+    if (client.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+    return payload;
+  }
+
+  if (payload.role === "admin" && payload.adminType === "consultant" && payload.adminId) {
+    const { prisma } = await import("@/lib/prisma");
+    const consultant = await prisma.consultant.findUnique({
+      where: { id: payload.adminId },
+      select: { active: true, sessionVersion: true },
+    });
+    if (!consultant?.active) return null;
+    if (consultant.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+    return payload;
+  }
+
+  return payload;
 }
 
 export function setSessionCookie(response: NextResponse, token: string) {

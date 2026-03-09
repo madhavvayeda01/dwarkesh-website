@@ -23,6 +23,7 @@ model Consultant {
   email     String   @unique
   password  String
   active    Boolean  @default(true)
+  sessionVersion Int @default(1)
   pageAccess Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -37,6 +38,7 @@ model Client {
   name          String
   email         String   @unique
   password      String
+  sessionVersion Int     @default(1)
 
   logoUrl       String?
   address       String?
@@ -57,6 +59,23 @@ model Client {
   complianceNotifications ComplianceNotification[]
   auditSchedules AuditSchedule[]
   chatThreadReadStates ChatThreadReadState[]
+}
+
+model PasswordResetToken {
+  id          String                   @id @default(cuid())
+  email       String
+  accountType PasswordResetAccountType
+  accountId   String
+  tokenHash   String                   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  requestedIp String?
+  userAgent   String?
+  createdAt   DateTime                 @default(now())
+
+  @@index([email, createdAt])
+  @@index([accountType, accountId, expiresAt])
+  @@index([expiresAt])
 }
 
 model Employee {
@@ -548,6 +567,11 @@ enum EmployeeFileStatus {
 enum EmployeeShiftCategory {
   STAFF
   WORKER
+}
+
+enum PasswordResetAccountType {
+  CLIENT
+  CONSULTANT
 }
 
 enum ChatSender {

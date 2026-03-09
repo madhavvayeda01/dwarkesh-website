@@ -34,5 +34,13 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "tests", "jest.config.ts"]
+  "exclude": [
+    "node_modules",
+    "tests",
+    "jest.config.ts",
+    "_deploy_fix",
+    "_redeploy_full",
+    ".idea",
+    "android"
+  ]
 }

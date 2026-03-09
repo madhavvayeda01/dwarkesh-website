@@ -4,9 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
+import { passwordSchema } from "@/lib/password-policy";
 
 const updatePasswordSchema = z.object({
-  password: z.string().trim().min(1),
+  password: passwordSchema,
 });
 
 export async function DELETE(
@@ -42,10 +43,21 @@ export async function PATCH(
     }
 
     const hashed = await bcrypt.hash(parsed.data.password, 10);
-    await prisma.client.update({
-      where: { id },
-      data: { password: hashed },
-    });
+    await prisma.$transaction([
+      prisma.client.update({
+        where: { id },
+        data: {
+          password: hashed,
+          sessionVersion: { increment: 1 },
+        },
+      }),
+      prisma.passwordResetToken.deleteMany({
+        where: {
+          accountType: "CLIENT",
+          accountId: id,
+        },
+      }),
+    ]);
 
     logger.info("admin.client.password_update.success", { clientId: id });
     return ok("Password updated", null);
