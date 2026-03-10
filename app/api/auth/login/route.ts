@@ -6,6 +6,9 @@ import { logger } from "@/lib/logger";
 import { REMEMBER_ME_MAX_AGE_SECONDS, setSessionCookie, signJwt } from "@/lib/auth";
 import { isMissingColumnError } from "@/lib/prisma-compat";
 
+let clientSessionVersionColumnExists: boolean | null = null;
+let consultantSessionVersionColumnExists: boolean | null = null;
+
 const loginSchema = z.object({
   usernameOrEmail: z.string().trim().min(1),
   password: z.string().min(1),
@@ -128,62 +131,105 @@ export async function POST(req: Request) {
   }
 }
 
-async function findConsultantForLogin(email: string) {
-  try {
-    return await prisma.consultant.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        password: true,
-        active: true,
-        sessionVersion: true,
-      },
-    });
-  } catch (error) {
-    if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
-      throw error;
-    }
+async function checkColumnExists(tableName: string, columnName: string) {
+  const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ${tableName}
+        AND column_name = ${columnName}
+    ) AS "exists"
+  `;
+  return Boolean(result?.[0]?.exists);
+}
 
-    const legacy = await prisma.consultant.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        password: true,
-        active: true,
-      },
-    });
-    return legacy ? { ...legacy, sessionVersion: 1 } : null;
+async function consultantSessionVersionSupported() {
+  if (consultantSessionVersionColumnExists !== null) return consultantSessionVersionColumnExists;
+  try {
+    consultantSessionVersionColumnExists = await checkColumnExists("Consultant", "sessionVersion");
+  } catch {
+    consultantSessionVersionColumnExists = true;
   }
+  return consultantSessionVersionColumnExists;
+}
+
+async function clientSessionVersionSupported() {
+  if (clientSessionVersionColumnExists !== null) return clientSessionVersionColumnExists;
+  try {
+    clientSessionVersionColumnExists = await checkColumnExists("Client", "sessionVersion");
+  } catch {
+    clientSessionVersionColumnExists = true;
+  }
+  return clientSessionVersionColumnExists;
+}
+
+async function findConsultantForLogin(email: string) {
+  const supportsSessionVersion = await consultantSessionVersionSupported();
+
+  if (supportsSessionVersion) {
+    try {
+      return await prisma.consultant.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          password: true,
+          active: true,
+          sessionVersion: true,
+        },
+      });
+    } catch (error) {
+      if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+        throw error;
+      }
+      consultantSessionVersionColumnExists = false;
+    }
+  }
+
+  const legacy = await prisma.consultant.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      password: true,
+      active: true,
+    },
+  });
+  return legacy ? { ...legacy, sessionVersion: 1 } : null;
 }
 
 async function findClientForLogin(email: string) {
-  try {
-    return await prisma.client.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        sessionVersion: true,
-      },
-    });
-  } catch (error) {
-    if (!isMissingColumnError(error, "Client", "sessionVersion")) {
-      throw error;
-    }
+  const supportsSessionVersion = await clientSessionVersionSupported();
 
-    const legacy = await prisma.client.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-      },
-    });
-    return legacy ? { ...legacy, sessionVersion: 1 } : null;
+  if (supportsSessionVersion) {
+    try {
+      return await prisma.client.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          sessionVersion: true,
+        },
+      });
+    } catch (error) {
+      if (!isMissingColumnError(error, "Client", "sessionVersion")) {
+        throw error;
+      }
+      clientSessionVersionColumnExists = false;
+    }
   }
+
+  const legacy = await prisma.client.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      password: true,
+    },
+  });
+  return legacy ? { ...legacy, sessionVersion: 1 } : null;
 }
