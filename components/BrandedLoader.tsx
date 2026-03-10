@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 type BrandedLoaderProps = {
   title?: string;
@@ -21,15 +22,13 @@ export default function BrandedLoader({
       <div className="relative">
         <div className="flex items-center gap-4">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[24px] border border-white/20 bg-[#001136] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_10px_22px_rgba(10,23,60,0.24)]">
-            <video
-              src="/loading-logo.mp4"
+            <Image
+              src="/logo.jpg"
+              alt="Dwarkesh Consultancy"
               className="h-full w-full object-contain p-[4px]"
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              aria-hidden="true"
+              width={80}
+              height={80}
+              priority={compact}
             />
             <div className="pointer-events-none absolute inset-0 ring-1 ring-white/15" />
           </div>
