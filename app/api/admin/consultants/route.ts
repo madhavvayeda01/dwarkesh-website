@@ -1,10 +1,12 @@
 import bcrypt from "bcrypt";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { DEFAULT_ADMIN_PAGE_ACCESS } from "@/lib/admin-config";
 import { toStoredAdminPageAccessMap } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
+import { isMissingColumnError } from "@/lib/prisma-compat";
 
 const createConsultantSchema = z.object({
   name: z.string().trim().min(2, "Consultant name is required."),
@@ -82,23 +84,10 @@ export async function POST(req: Request) {
 
   const password = await bcrypt.hash(parsed.data.password, 10);
   try {
-    const consultant = await prisma.consultant.create({
-      data: {
-        name: parsed.data.name.trim(),
-        email: normalizedEmail,
-        password,
-        active: true,
-        pageAccess: DEFAULT_ADMIN_PAGE_ACCESS,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        active: true,
-        pageAccess: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const consultant = await createConsultantWithSchemaCompat({
+      name: parsed.data.name.trim(),
+      email: normalizedEmail,
+      password,
     });
 
     return ok("Consultant created", {
@@ -118,5 +107,61 @@ export async function POST(req: Request) {
     }
 
     throw createError;
+  }
+}
+
+async function createConsultantWithSchemaCompat(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  try {
+    return await prisma.consultant.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        password: input.password,
+        active: true,
+        pageAccess: DEFAULT_ADMIN_PAGE_ACCESS,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        active: true,
+        pageAccess: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  } catch (error) {
+    if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+      throw error;
+    }
+
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "Consultant" ("id", "name", "email", "password", "active", "pageAccess", "createdAt", "updatedAt")
+      VALUES (${id}, ${input.name}, ${input.email}, ${input.password}, ${true}, ${DEFAULT_ADMIN_PAGE_ACCESS as object}, NOW(), NOW())
+    `;
+
+    const consultant = await prisma.consultant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        active: true,
+        pageAccess: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!consultant) {
+      throw new Error("Failed to create consultant in compatibility mode.");
+    }
+
+    return consultant;
   }
 }

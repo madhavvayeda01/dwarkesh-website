@@ -21,6 +21,8 @@ export type SessionPayload = {
 const COOKIE_NAME = "session_token";
 const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 export const REMEMBER_ME_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+let clientSessionVersionColumnExists: boolean | null = null;
+let consultantSessionVersionColumnExists: boolean | null = null;
 
 type SessionCookieOptions = {
   persistent?: boolean;
@@ -54,6 +56,51 @@ function getSecret() {
   }
 
   throw new Error("JWT_SECRET or ADMIN_PASSWORD must be configured for session signing.");
+}
+
+async function checkColumnExists(
+  prisma: { $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T> },
+  tableName: string,
+  columnName: string
+) {
+  const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ${tableName}
+        AND column_name = ${columnName}
+    ) AS "exists"
+  `;
+  return Boolean(result?.[0]?.exists);
+}
+
+async function clientSessionVersionSupported(
+  prisma: { $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T> }
+) {
+  if (clientSessionVersionColumnExists !== null) return clientSessionVersionColumnExists;
+  try {
+    clientSessionVersionColumnExists = await checkColumnExists(prisma, "Client", "sessionVersion");
+  } catch {
+    clientSessionVersionColumnExists = true;
+  }
+  return clientSessionVersionColumnExists;
+}
+
+async function consultantSessionVersionSupported(
+  prisma: { $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T> }
+) {
+  if (consultantSessionVersionColumnExists !== null) return consultantSessionVersionColumnExists;
+  try {
+    consultantSessionVersionColumnExists = await checkColumnExists(
+      prisma,
+      "Consultant",
+      "sessionVersion"
+    );
+  } catch {
+    consultantSessionVersionColumnExists = true;
+  }
+  return consultantSessionVersionColumnExists;
 }
 
 export function signJwt(
@@ -94,46 +141,58 @@ export async function getSessionFromCookies() {
 
   if (payload.role === "client" && payload.clientId) {
     const { prisma } = await import("@/lib/prisma");
-    try {
-      const client = await prisma.client.findUnique({
-        where: { id: payload.clientId },
-        select: { sessionVersion: true },
-      });
-      if (!client) return null;
-      if (client.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
-      return payload;
-    } catch (error) {
-      if (!isMissingColumnError(error, "Client", "sessionVersion")) {
-        throw error;
+    const supportsSessionVersion = await clientSessionVersionSupported(prisma);
+
+    if (supportsSessionVersion) {
+      try {
+        const client = await prisma.client.findUnique({
+          where: { id: payload.clientId },
+          select: { sessionVersion: true },
+        });
+        if (!client) return null;
+        if (client.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+        return payload;
+      } catch (error) {
+        if (!isMissingColumnError(error, "Client", "sessionVersion")) {
+          throw error;
+        }
+        clientSessionVersionColumnExists = false;
       }
-      const client = await prisma.client.findUnique({
-        where: { id: payload.clientId },
-        select: { id: true },
-      });
-      return client ? payload : null;
     }
+
+    const client = await prisma.client.findUnique({
+      where: { id: payload.clientId },
+      select: { id: true },
+    });
+    return client ? payload : null;
   }
 
   if (payload.role === "admin" && payload.adminType === "consultant" && payload.adminId) {
     const { prisma } = await import("@/lib/prisma");
-    try {
-      const consultant = await prisma.consultant.findUnique({
-        where: { id: payload.adminId },
-        select: { active: true, sessionVersion: true },
-      });
-      if (!consultant?.active) return null;
-      if (consultant.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
-      return payload;
-    } catch (error) {
-      if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
-        throw error;
+    const supportsSessionVersion = await consultantSessionVersionSupported(prisma);
+
+    if (supportsSessionVersion) {
+      try {
+        const consultant = await prisma.consultant.findUnique({
+          where: { id: payload.adminId },
+          select: { active: true, sessionVersion: true },
+        });
+        if (!consultant?.active) return null;
+        if (consultant.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+        return payload;
+      } catch (error) {
+        if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+          throw error;
+        }
+        consultantSessionVersionColumnExists = false;
       }
-      const consultant = await prisma.consultant.findUnique({
-        where: { id: payload.adminId },
-        select: { active: true },
-      });
-      return consultant?.active ? payload : null;
     }
+
+    const consultant = await prisma.consultant.findUnique({
+      where: { id: payload.adminId },
+      select: { active: true },
+    });
+    return consultant?.active ? payload : null;
   }
 
   return payload;
