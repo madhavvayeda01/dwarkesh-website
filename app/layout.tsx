@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import "./globals.css";
 import Link from "next/link";
-import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import AdminNavLink from "@/components/AdminNavLink";
 import DashboardSidebarTrigger from "@/components/DashboardSidebarTrigger";
@@ -40,9 +39,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="bg-slate-100 text-slate-900" suppressHydrationWarning>
         <HeaderHeightSync />
-        <Suspense fallback={null}>
-          <GlobalLoadingOverlay />
-        </Suspense>
+        <GlobalLoadingOverlay />
         <header
           data-app-header
           className="app-shell-header fixed inset-x-0 top-0 z-[80] text-white"

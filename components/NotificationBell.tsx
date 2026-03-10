@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import type {
   MarkNotificationReadPayload,
   NotificationFeedItem,
@@ -64,7 +65,17 @@ function categoryLabel(item: NotificationFeedItem) {
   return "Compliance";
 }
 
+function shouldSkipAuthProbe(pathname: string) {
+  return (
+    pathname === "/signin" ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/reset-password")
+  );
+}
+
 export default function NotificationBell() {
+  const pathname = usePathname();
+  const skipAuthProbe = shouldSkipAuthProbe(pathname);
   const [role, setRole] = useState<Role | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -88,6 +99,11 @@ export default function NotificationBell() {
   const notificationsHref = role === "admin" ? "/admin/notifications" : "/client/notifications";
 
   const resolveRole = useCallback(async () => {
+    if (skipAuthProbe) {
+      setRole(null);
+      return;
+    }
+
     try {
       const [adminRes, clientRes] = await Promise.all([
         fetch("/api/admin/me", { cache: "no-store" }),
@@ -114,7 +130,7 @@ export default function NotificationBell() {
     }
 
     setRole(null);
-  }, []);
+  }, [skipAuthProbe]);
 
   const loadNotifications = useCallback(async () => {
     if (!endpointBase) return;
@@ -207,8 +223,14 @@ export default function NotificationBell() {
   }
 
   useEffect(() => {
+    if (skipAuthProbe) {
+      setOpen(false);
+      setRole(null);
+      return;
+    }
+
     void resolveRole();
-  }, [resolveRole]);
+  }, [resolveRole, skipAuthProbe]);
 
   useEffect(() => {
     if (!endpointBase) return;

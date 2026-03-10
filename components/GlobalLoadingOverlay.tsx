@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BrandedLoader from "@/components/BrandedLoader";
 
@@ -22,17 +22,13 @@ function isInternalNavigationAnchor(
   return anchor;
 }
 
-function normalizeRoute(pathname: string, search: string) {
-  return search ? `${pathname}?${search}` : pathname;
+function normalizeRoute(pathname: string) {
+  return pathname || "/";
 }
 
 export default function GlobalLoadingOverlay() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentRoute = useMemo(
-    () => normalizeRoute(pathname || "/", searchParams?.toString() || ""),
-    [pathname, searchParams]
-  );
+  const currentRoute = useMemo(() => normalizeRoute(pathname || "/"), [pathname]);
 
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("Opening page");
@@ -121,8 +117,8 @@ export default function GlobalLoadingOverlay() {
 
       const url = new URL(anchor.href, window.location.origin);
       if (url.origin !== window.location.origin) return;
-      const targetRoute = normalizeRoute(url.pathname, url.search.slice(1));
-      const current = normalizeRoute(window.location.pathname, window.location.search.slice(1));
+      const targetRoute = normalizeRoute(url.pathname);
+      const current = normalizeRoute(window.location.pathname);
       if (targetRoute === current) return;
 
       startNavigationLoader();
