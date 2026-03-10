@@ -8,6 +8,8 @@ import { toStoredAdminPageAccessMap } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
 import { isMissingColumnError } from "@/lib/prisma-compat";
 
+let consultantSessionVersionColumnExists: boolean | null = null;
+
 const createConsultantSchema = z.object({
   name: z.string().trim().min(2, "Consultant name is required."),
   email: z.string().trim().email("Enter a valid consultant email."),
@@ -115,53 +117,81 @@ async function createConsultantWithSchemaCompat(input: {
   email: string;
   password: string;
 }) {
+  const supportsSessionVersion = await consultantSessionVersionSupported();
+
+  if (supportsSessionVersion) {
+    try {
+      return await prisma.consultant.create({
+        data: {
+          name: input.name,
+          email: input.email,
+          password: input.password,
+          active: true,
+          pageAccess: DEFAULT_ADMIN_PAGE_ACCESS,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          active: true,
+          pageAccess: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error) {
+      if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+        throw error;
+      }
+      consultantSessionVersionColumnExists = false;
+    }
+  }
+
+  const id = randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO "Consultant" ("id", "name", "email", "password", "active", "pageAccess", "createdAt", "updatedAt")
+    VALUES (${id}, ${input.name}, ${input.email}, ${input.password}, ${true}, ${DEFAULT_ADMIN_PAGE_ACCESS as object}, NOW(), NOW())
+  `;
+
+  const consultant = await prisma.consultant.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      active: true,
+      pageAccess: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!consultant) {
+    throw new Error("Failed to create consultant in compatibility mode.");
+  }
+
+  return consultant;
+}
+
+async function consultantSessionVersionSupported() {
+  if (consultantSessionVersionColumnExists !== null) {
+    return consultantSessionVersionColumnExists;
+  }
+
   try {
-    return await prisma.consultant.create({
-      data: {
-        name: input.name,
-        email: input.email,
-        password: input.password,
-        active: true,
-        pageAccess: DEFAULT_ADMIN_PAGE_ACCESS,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        active: true,
-        pageAccess: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } catch (error) {
-    if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
-      throw error;
-    }
-
-    const id = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "Consultant" ("id", "name", "email", "password", "active", "pageAccess", "createdAt", "updatedAt")
-      VALUES (${id}, ${input.name}, ${input.email}, ${input.password}, ${true}, ${DEFAULT_ADMIN_PAGE_ACCESS as object}, NOW(), NOW())
+    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'Consultant'
+          AND column_name = 'sessionVersion'
+      ) AS "exists"
     `;
-
-    const consultant = await prisma.consultant.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        active: true,
-        pageAccess: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    if (!consultant) {
-      throw new Error("Failed to create consultant in compatibility mode.");
-    }
-
-    return consultant;
+    consultantSessionVersionColumnExists = Boolean(result?.[0]?.exists);
+    return consultantSessionVersionColumnExists;
+  } catch {
+    consultantSessionVersionColumnExists = true;
+    return consultantSessionVersionColumnExists;
   }
 }
