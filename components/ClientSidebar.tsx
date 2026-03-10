@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CLIENT_PAGE_DEFINITIONS,
   DEFAULT_PAGE_ACCESS,
@@ -35,6 +35,8 @@ const SALARY_SUBGROUP_LABELS = {
 export default function ClientSidebar() {
   const pathname = usePathname();
   const [pages, setPages] = useState<PageAccessMap>(DEFAULT_PAGE_ACCESS);
+  const accessFetchInFlightRef = useRef(false);
+  const lastAccessFetchAtRef = useRef(0);
   const {
     collapsed,
     compact,
@@ -51,12 +53,22 @@ export default function ClientSidebar() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAccess() {
-      const res = await fetch("/api/client/modules", { cache: "no-store" });
-      const data = (await res.json().catch(() => ({}))) as { data?: ModulesResponse };
-      if (!res.ok) return;
-      if (!cancelled) {
-        setPages({ ...DEFAULT_PAGE_ACCESS, ...(data?.data?.pages || {}) });
+    async function loadAccess(options?: { force?: boolean }) {
+      if (accessFetchInFlightRef.current) return;
+      const now = Date.now();
+      if (!options?.force && now - lastAccessFetchAtRef.current < 1500) return;
+
+      accessFetchInFlightRef.current = true;
+      try {
+        const res = await fetch("/api/client/modules", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as { data?: ModulesResponse };
+        if (!res.ok || cancelled) return;
+        lastAccessFetchAtRef.current = Date.now();
+        if (!cancelled) {
+          setPages({ ...DEFAULT_PAGE_ACCESS, ...(data?.data?.pages || {}) });
+        }
+      } finally {
+        accessFetchInFlightRef.current = false;
       }
     }
 
@@ -66,7 +78,7 @@ export default function ClientSidebar() {
       }
     }
 
-    void loadAccess();
+    void loadAccess({ force: true });
 
     window.addEventListener("focus", handleVisibilityRefresh);
     document.addEventListener("visibilitychange", handleVisibilityRefresh);

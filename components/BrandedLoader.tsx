@@ -20,10 +20,18 @@ export default function BrandedLoader({
       <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.1)_35%,transparent_70%)] animate-[pulse_2.6s_ease-in-out_infinite]" />
       <div className="relative">
         <div className="flex items-center gap-4">
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/15 bg-white/10 shadow-inner">
-            <div className="absolute h-10 w-10 rounded-full border-2 border-cyan-200/40" />
-            <div className="absolute h-12 w-12 rounded-full border-t-2 border-[#f7c63d] animate-spin" />
-            <div className="h-5 w-5 rounded-full bg-[#f7c63d] shadow-[0_0_24px_rgba(247,198,61,0.75)]" />
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[24px] border border-white/20 bg-[#001136] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_10px_22px_rgba(10,23,60,0.24)]">
+            <video
+              src="/loading-logo.mp4"
+              className="h-full w-full object-contain p-[4px]"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              aria-hidden="true"
+            />
+            <div className="pointer-events-none absolute inset-0 ring-1 ring-white/15" />
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200/90">

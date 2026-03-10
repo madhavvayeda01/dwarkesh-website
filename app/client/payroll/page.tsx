@@ -70,12 +70,6 @@ type PayrollMasterImportReport = {
   issueTruncated: boolean;
 };
 
-type ContextMeta = {
-  clientId: string;
-  clientName: string;
-  employeeCount: number;
-};
-
 const MONTHS = [
   "January",
   "February",
@@ -107,8 +101,6 @@ export default function ClientPayrollPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importReport, setImportReport] = useState<PayrollMasterImportReport | null>(null);
-  const [contextMeta, setContextMeta] = useState<ContextMeta | null>(null);
-  const [lastContextRowCount, setLastContextRowCount] = useState(0);
   const [globalSearch, setGlobalSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -117,11 +109,7 @@ export default function ClientPayrollPage() {
   const today = new Date();
   const [payrollMonth, setPayrollMonth] = useState<number>(today.getMonth());
   const [payrollYear, setPayrollYear] = useState<number>(today.getFullYear());
-  const {
-    client,
-    moduleEnabled,
-    loading: accessLoading,
-  } = useClientPageAccess({ pageKey: "payroll" });
+  const { moduleEnabled, loading: accessLoading } = useClientPageAccess({ pageKey: "payroll" });
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -153,8 +141,6 @@ export default function ClientPayrollPage() {
     if (!res.ok) {
       setRows([]);
       setWarnings([]);
-      setContextMeta(null);
-      setLastContextRowCount(0);
       setStatus(data?.message || "Failed to load payroll context.");
       setLoadingContext(false);
       if (res.status === 401) {
@@ -166,12 +152,6 @@ export default function ClientPayrollPage() {
     const payload = data?.data ?? data;
     const nextRows = (payload?.rows || []) as PayrollMasterRow[];
     const nextWarnings = (payload?.warnings || []) as string[];
-    setContextMeta({
-      clientId: payload?.clientId || "",
-      clientName: payload?.clientName || "",
-      employeeCount: Number(payload?.employeeCount) || nextRows.length,
-    });
-    setLastContextRowCount(nextRows.length);
     setRows(nextRows);
     setWarnings(nextWarnings);
     resetFilters();
@@ -485,27 +465,27 @@ export default function ClientPayrollPage() {
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-slate-100">
+    <div className="flex min-h-screen overflow-x-hidden bg-slate-100 dark:bg-slate-950">
       <ClientSidebar />
 
-      <main className="flex-1 min-w-0 p-8">
+      <main className="flex-1 min-w-0 p-8 text-slate-900 dark:text-slate-100">
         {moduleEnabled === false ? (
-          <div className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="text-xl font-bold text-blue-950">Page Disabled</h2>
-            <p className="mt-2 text-slate-600">This page is not enabled by consultant.</p>
+          <div className="rounded-2xl bg-white p-6 shadow dark:bg-slate-900">
+            <h2 className="text-xl font-bold text-blue-950 dark:text-white">Page Disabled</h2>
+            <p className="mt-2 text-slate-600 dark:text-slate-300">This page is not enabled by consultant.</p>
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-extrabold text-blue-950">Payroll Module</h1>
-                <p className="mt-1 text-sm text-slate-600">
+                <h1 className="text-3xl font-extrabold text-blue-950 dark:text-white">Payroll Module</h1>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                   Excel-matched payroll logic with monthly cap days and live payroll record save.
                 </p>
                 {(importFile || status) && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
                     {importFile && (
-                      <span className="rounded-full border border-slate-300 bg-white px-3 py-1">
+                      <span className="rounded-full border border-slate-300 bg-white px-3 py-1 dark:border-slate-600 dark:bg-slate-800">
                         File: {importFile.name}
                       </span>
                     )}
@@ -513,7 +493,7 @@ export default function ClientPayrollPage() {
                   </div>
                 )}
                 {warnings.length > 0 && (
-                  <ul className="mt-2 list-disc pl-5 text-xs text-amber-700">
+                  <ul className="mt-2 list-disc pl-5 text-xs text-amber-700 dark:text-amber-300">
                     {warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
@@ -521,53 +501,7 @@ export default function ClientPayrollPage() {
                 )}
               </div>
 
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">Payroll Month</label>
-                  <select
-                    value={payrollMonth}
-                    onChange={(e) => setPayrollMonth(Number(e.target.value))}
-                    className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
-                  >
-                    {MONTHS.map((month, index) => (
-                      <option key={month} value={index}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">Payroll Year</label>
-                  <select
-                    value={payrollYear}
-                    onChange={(e) => setPayrollYear(Number(e.target.value))}
-                    className="mt-1 rounded-xl border bg-white px-3 py-2 text-slate-900"
-                  >
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void loadContext(payrollMonth, payrollYear)}
-                  className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50"
-                >
-                  Refresh
-                </button>
-
-                <button
-                  type="button"
-                  onClick={exportPayrollData}
-                  className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
-                >
-                  Export Data
-                </button>
-
+              <div className="flex flex-col gap-3 sm:items-end">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -576,63 +510,86 @@ export default function ClientPayrollPage() {
                   className="hidden"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50"
-                >
-                  {importFile ? "Change File" : "Choose File"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  >
+                    {importFile ? "Change File" : "Choose File"}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={importPayrollData}
-                  disabled={!importFile}
-                  className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-                >
-                  Import Data
-                </button>
+                  <button
+                    type="button"
+                    onClick={importPayrollData}
+                    disabled={!importFile}
+                    className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    Import Data
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={generatePayroll}
-                  className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
-                >
-                  Generate Payroll
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Session Context
-                </p>
-                <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-                  <div>Active Client: <span className="font-semibold">{contextMeta?.clientName || client?.name || "-"}</span></div>
-                  <div>Client ID: <span className="font-mono text-xs font-semibold">{contextMeta?.clientId || client?.id || "-"}</span></div>
-                  <div>Selected Period: <span className="font-semibold">{MONTHS[payrollMonth]} {payrollYear}</span></div>
-                  <div>API Employee Count: <span className="font-semibold">{contextMeta?.employeeCount ?? 0}</span></div>
-                  <div>Context Rows Loaded: <span className="font-semibold">{lastContextRowCount}</span></div>
-                  <div>
-                    Grid Rows Visible:{" "}
-                    <span className="font-semibold">
-                      {computed.length}
-                      {computed.length !== rows.length ? ` / ${rows.length}` : ""}
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={exportPayrollData}
+                    className="rounded-2xl bg-yellow-500 px-5 py-2 font-semibold text-blue-950 hover:bg-yellow-400"
+                  >
+                    Export Data
+                  </button>
                 </div>
-                {lastContextRowCount !== rows.length && (
-                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                    Grid row count differs from the last loaded context. Imported or locally modified state is active.
-                  </p>
-                )}
+
+                <div className="flex flex-wrap items-end gap-3 sm:justify-end">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Payroll Month</label>
+                    <select
+                      value={payrollMonth}
+                      onChange={(e) => setPayrollMonth(Number(e.target.value))}
+                      className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      {MONTHS.map((month, index) => (
+                        <option key={month} value={index}>
+                          {month}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Payroll Year</label>
+                    <select
+                      value={payrollYear}
+                      onChange={(e) => setPayrollYear(Number(e.target.value))}
+                      className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void loadContext(payrollMonth, payrollYear)}
+                    className="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  >
+                    Refresh
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={generatePayroll}
+                    className="rounded-2xl bg-blue-900 px-5 py-2 font-semibold text-white hover:bg-blue-800"
+                  >
+                    Generate Payroll
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-blue-950">
+                <h3 className="text-sm font-bold text-blue-950 dark:text-slate-100">
                   Payroll Filters ({computed.length}
                   {computed.length !== rows.length ? ` / ${rows.length}` : ""})
                 </h3>
@@ -641,13 +598,13 @@ export default function ClientPayrollPage() {
                     value={globalSearch}
                     onChange={(e) => setGlobalSearch(e.target.value)}
                     placeholder="Search all payroll fields..."
-                    className="w-full min-w-[220px] max-w-[360px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    className="w-full min-w-[220px] max-w-[360px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   />
 
                   <select
                     value={departmentFilter}
                     onChange={(e) => setDepartmentFilter(e.target.value)}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="ALL">Department: All</option>
                     {filterOptions.departments.map((option) => (
@@ -660,7 +617,7 @@ export default function ClientPayrollPage() {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="ALL">Status: All</option>
                     {filterOptions.statuses.map((option) => (
@@ -673,7 +630,7 @@ export default function ClientPayrollPage() {
                   <select
                     value={designationFilter}
                     onChange={(e) => setDesignationFilter(e.target.value)}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="ALL">Designation: All</option>
                     {filterOptions.designations.map((option) => (
@@ -686,7 +643,7 @@ export default function ClientPayrollPage() {
                   <select
                     value={weekOffFilter}
                     onChange={(e) => setWeekOffFilter(e.target.value)}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="ALL">Week Off: All</option>
                     {filterOptions.weekOffs.map((option) => (
@@ -699,22 +656,22 @@ export default function ClientPayrollPage() {
                   <button
                     type="button"
                     onClick={resetFilters}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                   >
                     Reset
                   </button>
                 </div>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Filters affect table view and totals only. Generate/Export use the full loaded payroll dataset.
               </p>
             </div>
 
             {importReport && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <h3 className="text-sm font-bold text-blue-950">Import Report</h3>
-                <p className="mt-1 text-xs text-slate-600">File: {importReport.fileName}</p>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-4">
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                <h3 className="text-sm font-bold text-blue-950 dark:text-slate-100">Import Report</h3>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">File: {importReport.fileName}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700 dark:text-slate-200 md:grid-cols-4">
                   <div>Parsed Rows: <span className="font-semibold">{importReport.parsedRows}</span></div>
                   <div>Rows With Code: <span className="font-semibold">{importReport.importedRowsWithCode}</span></div>
                   <div>Unique Codes: <span className="font-semibold">{importReport.uniqueCodes}</span></div>
@@ -738,17 +695,17 @@ export default function ClientPayrollPage() {
 
                 {importReport.unknownCodes.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-xs font-semibold text-amber-700">
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
                       Unknown Employee Codes (not in active employee master):
                     </p>
-                    <p className="mt-1 text-xs text-amber-700">{importReport.unknownCodes.join(", ")}</p>
+                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{importReport.unknownCodes.join(", ")}</p>
                   </div>
                 )}
 
                 {importReport.issues.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-xs font-semibold text-slate-800">Issue Details</p>
-                    <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">Issue Details</p>
+                    <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       {importReport.issues.map((issue, index) => (
                         <p key={`${issue.type}-${issue.rowNumber}-${issue.code || ""}-${index}`}>
                           Row {issue.rowNumber > 0 ? issue.rowNumber : "-"}
@@ -758,7 +715,7 @@ export default function ClientPayrollPage() {
                         </p>
                       ))}
                       {importReport.issueTruncated && (
-                        <p className="mt-1 font-semibold text-slate-600">
+                        <p className="mt-1 font-semibold text-slate-600 dark:text-slate-300">
                           More issues exist. Showing first {importReport.issues.length} entries.
                         </p>
                       )}
@@ -777,10 +734,10 @@ export default function ClientPayrollPage() {
                 />
               </div>
             ) : (
-              <div className="mt-6 max-w-full overflow-x-auto rounded-2xl border bg-white">
-                <table className="min-w-[3600px] w-full text-sm text-slate-900">
+              <div className="mt-6 max-w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                <table className="min-w-[3600px] w-full text-sm text-slate-900 dark:text-slate-100">
                   <thead>
-                    <tr className="bg-slate-200 text-left text-slate-700">
+                    <tr className="bg-slate-200 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       <th className="p-3">Sr#</th>
                       <th className="p-3">UAN</th>
                       <th className="p-3">ESIC</th>
@@ -789,13 +746,13 @@ export default function ClientPayrollPage() {
                       <th className="p-3">Dept</th>
                       <th className="p-3">Desig.</th>
                       <th className="p-3">DOJ</th>
-                      <th className="p-3 bg-green-100">Actual Rate</th>
-                      <th className="p-3 bg-blue-100">Skill</th>
-                      <th className="p-3 bg-blue-100">Working Days</th>
-                      <th className="p-3 bg-green-100">Week Off</th>
-                      <th className="p-3 bg-green-100">Cap Days (Y)</th>
+                      <th className="p-3 bg-green-100 dark:bg-emerald-900/45 dark:text-emerald-100">Actual Rate</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">Skill</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">Working Days</th>
+                      <th className="p-3 bg-green-100 dark:bg-emerald-900/45 dark:text-emerald-100">Week Off</th>
+                      <th className="p-3 bg-green-100 dark:bg-emerald-900/45 dark:text-emerald-100">Cap Days (Y)</th>
                       <th className="p-3">Pay Days</th>
-                      <th className="p-3 bg-blue-100">Other Benefit</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">Other Benefit</th>
                       <th className="p-3">Basic</th>
                       <th className="p-3">HRA</th>
                       <th className="p-3">TOTAL</th>
@@ -804,11 +761,11 @@ export default function ClientPayrollPage() {
                       <th className="p-3">PF</th>
                       <th className="p-3">ESIC</th>
                       <th className="p-3">Prof Tax</th>
-                      <th className="p-3 bg-blue-100">TDS</th>
-                      <th className="p-3 bg-blue-100">Loan</th>
-                      <th className="p-3 bg-green-100">Adv</th>
-                      <th className="p-3 bg-blue-100">Tea</th>
-                      <th className="p-3 bg-blue-100">LWF</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">TDS</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">Loan</th>
+                      <th className="p-3 bg-green-100 dark:bg-emerald-900/45 dark:text-emerald-100">Adv</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">Tea</th>
+                      <th className="p-3 bg-blue-100 dark:bg-sky-900/45 dark:text-sky-100">LWF</th>
                       <th className="p-3">Total Deduction</th>
                       <th className="p-3">Net Payable</th>
                       <th className="p-3">Signature</th>
@@ -820,7 +777,7 @@ export default function ClientPayrollPage() {
                   </thead>
                   <tbody>
                     {computed.map(({ row, calc }) => (
-                      <tr key={row.id} className="border-t">
+                      <tr key={row.id} className="border-t border-slate-200 dark:border-slate-700">
                         <td className="p-3">{row.srNo}</td>
                         <td className="p-3">{row.uanNo || "-"}</td>
                         <td className="p-3">{row.esicNo || "-"}</td>
@@ -829,10 +786,10 @@ export default function ClientPayrollPage() {
                         <td className="p-3">{row.department || "-"}</td>
                         <td className="p-3">{row.designation || "-"}</td>
                         <td className="p-3">{row.doj || "-"}</td>
-                        <td className="p-3 bg-green-50">{money(row.actualRateOfPay)}</td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{money(row.actualRateOfPay)}</td>
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <select
-                            className="w-20 rounded border px-2 py-1 text-slate-900"
+                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.skillCategory}
                             onChange={(e) =>
                               updateInput(row.id, "skillCategory", Number(e.target.value) || 3)
@@ -843,24 +800,24 @@ export default function ClientPayrollPage() {
                             <option value={3}>3</option>
                           </select>
                         </td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
                             step="0.5"
-                            className="w-24 rounded border px-2 py-1 text-slate-900"
+                            className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.actualWorkingDays}
                             onChange={(e) =>
                               updateInput(row.id, "actualWorkingDays", Number(e.target.value) || 0)
                             }
                           />
                         </td>
-                        <td className="p-3 bg-green-50">{row.weeklyOffLabel || weekdayName(row.weeklyOffDay)}</td>
-                        <td className="p-3 bg-green-50">{row.monthlyCapDaysY}</td>
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{row.weeklyOffLabel || weekdayName(row.weeklyOffDay)}</td>
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{row.monthlyCapDaysY}</td>
                         <td className="p-3">{calc.payDaysAC}</td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
-                            className="w-24 rounded border px-2 py-1 text-slate-900"
+                            className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.otherBenefit}
                             onChange={(e) =>
                               updateInput(row.id, "otherBenefit", Number(e.target.value) || 0)
@@ -875,41 +832,41 @@ export default function ClientPayrollPage() {
                         <td className="p-3">{money(calc.pfAR)}</td>
                         <td className="p-3">{money(calc.esicAS)}</td>
                         <td className="p-3">{money(calc.profTaxAT)}</td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
-                            className="w-20 rounded border px-2 py-1 text-slate-900"
+                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.tds}
                             onChange={(e) => updateInput(row.id, "tds", Number(e.target.value) || 0)}
                           />
                         </td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
-                            className="w-20 rounded border px-2 py-1 text-slate-900"
+                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.loan}
                             onChange={(e) => updateInput(row.id, "loan", Number(e.target.value) || 0)}
                           />
                         </td>
-                        <td className="p-3 bg-green-50">{money(row.adv)}</td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{money(row.adv)}</td>
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
-                            className="w-20 rounded border px-2 py-1 text-slate-900"
+                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.tea}
                             onChange={(e) => updateInput(row.id, "tea", Number(e.target.value) || 0)}
                           />
                         </td>
-                        <td className="p-2 bg-blue-50">
+                        <td className="p-2 bg-blue-50 dark:bg-sky-900/25">
                           <input
                             type="number"
-                            className="w-20 rounded border px-2 py-1 text-slate-900"
+                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                             value={row.lwf}
                             onChange={(e) => updateInput(row.id, "lwf", Number(e.target.value) || 0)}
                           />
                         </td>
                         <td className="p-3">{money(calc.totalDeductionAZ)}</td>
-                        <td className="p-3 font-semibold text-blue-950">{money(calc.netPayableBA)}</td>
+                        <td className="p-3 font-semibold text-blue-950 dark:text-blue-200">{money(calc.netPayableBA)}</td>
                         <td className="p-3">{calc.signatureBB}</td>
                         <td className="p-3">{row.bankAcNo || "-"}</td>
                         <td className="p-3">{row.ifscCode || "-"}</td>
@@ -919,25 +876,25 @@ export default function ClientPayrollPage() {
                     ))}
 
                     {computed.length === 0 && (
-                      <tr className="border-t">
-                        <td colSpan={35} className="p-4 text-center text-slate-600">
+                      <tr className="border-t border-slate-200 dark:border-slate-700">
+                        <td colSpan={35} className="p-4 text-center text-slate-600 dark:text-slate-300">
                           No payroll rows match current filters.
                         </td>
                       </tr>
                     )}
 
                     {computed.length > 0 && (
-                      <tr className="border-t-2 bg-slate-100 font-bold text-slate-900">
+                      <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
                         <td className="p-3" colSpan={8}>
                           Grand Total
                         </td>
-                        <td className="p-3 bg-green-50">{money(payrollTotals.actualRateOfPay)}</td>
-                        <td className="p-3 bg-blue-50">-</td>
-                        <td className="p-3 bg-blue-50">{payrollTotals.actualWorkingDays.toFixed(2)}</td>
-                        <td className="p-3 bg-green-50">-</td>
-                        <td className="p-3 bg-green-50">-</td>
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{money(payrollTotals.actualRateOfPay)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">-</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{payrollTotals.actualWorkingDays.toFixed(2)}</td>
+                        <td className="p-3 bg-green-50 dark:bg-emerald-900/25">-</td>
+                        <td className="p-3 bg-green-50 dark:bg-emerald-900/25">-</td>
                         <td className="p-3">{payrollTotals.payDays.toFixed(2)}</td>
-                        <td className="p-3 bg-blue-50">{money(payrollTotals.otherBenefit)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{money(payrollTotals.otherBenefit)}</td>
                         <td className="p-3">{money(payrollTotals.basic)}</td>
                         <td className="p-3">{money(payrollTotals.hra)}</td>
                         <td className="p-3">{money(payrollTotals.total)}</td>
@@ -946,13 +903,13 @@ export default function ClientPayrollPage() {
                         <td className="p-3">{money(payrollTotals.pf)}</td>
                         <td className="p-3">{money(payrollTotals.esic)}</td>
                         <td className="p-3">{money(payrollTotals.profTax)}</td>
-                        <td className="p-3 bg-blue-50">{money(payrollTotals.tds)}</td>
-                        <td className="p-3 bg-blue-50">{money(payrollTotals.loan)}</td>
-                        <td className="p-3 bg-green-50">{money(payrollTotals.adv)}</td>
-                        <td className="p-3 bg-blue-50">{money(payrollTotals.tea)}</td>
-                        <td className="p-3 bg-blue-50">{money(payrollTotals.lwf)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{money(payrollTotals.tds)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{money(payrollTotals.loan)}</td>
+                        <td className="p-3 bg-green-50 text-slate-900 dark:bg-emerald-900/25 dark:text-emerald-100">{money(payrollTotals.adv)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{money(payrollTotals.tea)}</td>
+                        <td className="p-3 bg-blue-50 dark:bg-sky-900/25">{money(payrollTotals.lwf)}</td>
                         <td className="p-3">{money(payrollTotals.totalDeduction)}</td>
-                        <td className="p-3 text-blue-950">{money(payrollTotals.netPayable)}</td>
+                        <td className="p-3 text-blue-950 dark:text-blue-200">{money(payrollTotals.netPayable)}</td>
                         <td className="p-3">-</td>
                         <td className="p-3">-</td>
                         <td className="p-3">-</td>

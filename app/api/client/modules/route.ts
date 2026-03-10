@@ -3,8 +3,7 @@ import { fail, ok } from "@/lib/api-response";
 import { requireClient } from "@/lib/auth-guards";
 import { CLIENT_PAGE_BY_KEY, CLIENT_PAGE_KEYS, type ClientPageKey, MODULE_KEYS, type ModuleKey } from "@/lib/module-config";
 import {
-  getClientModuleAccess,
-  getClientPageAccess,
+  getClientAccessSnapshot,
   getImpersonationPageAccess,
 } from "@/lib/module-control";
 
@@ -26,41 +25,47 @@ const querySchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const { error, session } = await requireClient();
-  if (error || !session || !session.clientId) return error ?? fail("Unauthorized", 401);
+  try {
+    const { error, session } = await requireClient();
+    if (error || !session || !session.clientId) return error ?? fail("Unauthorized", 401);
 
-  const url = new URL(req.url);
-  const parsed = querySchema.safeParse({
-    module: url.searchParams.get("module") || undefined,
-    page: url.searchParams.get("page") || undefined,
-  });
-  if (!parsed.success) return fail("Invalid query", 400, parsed.error.flatten());
-
-  const moduleAccess = await getClientModuleAccess(session.clientId);
-  const pageAccess = session.impersonatedByAdmin
-    ? getImpersonationPageAccess(moduleAccess)
-    : await getClientPageAccess(session.clientId);
-  const moduleKey = parsed.data.module as ModuleKey | undefined;
-  const pageKey = parsed.data.page as ClientPageKey | undefined;
-
-  if (moduleKey) {
-    return ok("Module access fetched", {
-      module: moduleKey,
-      enabled: moduleAccess[moduleKey],
-      modules: moduleAccess,
-      pages: pageAccess,
+    const url = new URL(req.url);
+    const parsed = querySchema.safeParse({
+      module: url.searchParams.get("module") || undefined,
+      page: url.searchParams.get("page") || undefined,
     });
-  }
+    if (!parsed.success) return fail("Invalid query", 400, parsed.error.flatten());
 
-  if (pageKey) {
-    const page = CLIENT_PAGE_BY_KEY[pageKey];
-    return ok("Page access fetched", {
-      page: pageKey,
-      enabled: pageAccess[pageKey] && moduleAccess[page.module],
-      modules: moduleAccess,
-      pages: pageAccess,
-    });
-  }
+    const snapshot = await getClientAccessSnapshot(session.clientId);
+    const moduleAccess = snapshot.modules;
+    const pageAccess = session.impersonatedByAdmin
+      ? getImpersonationPageAccess(moduleAccess)
+      : snapshot.effectivePages;
+    const moduleKey = parsed.data.module as ModuleKey | undefined;
+    const pageKey = parsed.data.page as ClientPageKey | undefined;
 
-  return ok("Module access fetched", { modules: moduleAccess, pages: pageAccess });
+    if (moduleKey) {
+      return ok("Module access fetched", {
+        module: moduleKey,
+        enabled: moduleAccess[moduleKey],
+        modules: moduleAccess,
+        pages: pageAccess,
+      });
+    }
+
+    if (pageKey) {
+      const page = CLIENT_PAGE_BY_KEY[pageKey];
+      return ok("Page access fetched", {
+        page: pageKey,
+        enabled: pageAccess[pageKey] && moduleAccess[page.module],
+        modules: moduleAccess,
+        pages: pageAccess,
+      });
+    }
+
+    return ok("Module access fetched", { modules: moduleAccess, pages: pageAccess });
+  } catch (error: unknown) {
+    void error;
+    return fail("Failed to load module access", 500);
+  }
 }

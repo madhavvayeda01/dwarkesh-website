@@ -12,7 +12,7 @@ type ClientOption = {
 type LegalDoc = {
   id: string;
   name: string;
-  documentStatus?: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
+  documentStatus?: "ACTIVE" | "INACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
   issueDate: string | null;
   expiryDate: string | null;
   remarks: string | null;
@@ -43,11 +43,32 @@ function formatDocumentStatus(value: LegalDoc["documentStatus"]) {
   return normalizeDocumentStatus(value).replace(/_/g, " ");
 }
 
+function isExpiredDate(value: string | null) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime() < today.getTime();
+}
+
+function getEffectiveDocumentStatus(document: Pick<LegalDoc, "documentStatus" | "expiryDate">) {
+  const status = normalizeDocumentStatus(document.documentStatus);
+  if (status === "ACTIVE" && isExpiredDate(document.expiryDate)) {
+    return "INACTIVE" as const;
+  }
+  return status;
+}
+
 function getStatus(document: Pick<LegalDoc, "documentStatus" | "expiryDate">) {
-  const documentStatus = normalizeDocumentStatus(document.documentStatus);
+  const documentStatus = getEffectiveDocumentStatus(document);
 
   if (documentStatus === "NOT_APPLICABLE") {
     return { label: "Not Applicable", tone: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100" };
+  }
+  if (documentStatus === "INACTIVE") {
+    return { label: "Expired", tone: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200" };
   }
   if (documentStatus === "NOT_AVAILABLE" || !document.expiryDate) {
     return { label: "Not Available", tone: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100" };
@@ -79,6 +100,7 @@ export default function AdminComplianceLegalDocsPage() {
     documentStatus: "ACTIVE" as LegalDoc["documentStatus"],
     issueDate: "",
     expiryDate: "",
+    expiryNotApplicable: false,
     remarks: "",
   });
 
@@ -143,7 +165,14 @@ export default function AdminComplianceLegalDocsPage() {
   async function onClientChange(nextClientId: string) {
     setClientId(nextClientId);
     setEditingId(null);
-    setForm({ name: "", documentStatus: "ACTIVE", issueDate: "", expiryDate: "", remarks: "" });
+    setForm({
+      name: "",
+      documentStatus: "ACTIVE",
+      issueDate: "",
+      expiryDate: "",
+      expiryNotApplicable: false,
+      remarks: "",
+    });
     setStatus("");
     await loadDocs(nextClientId);
   }
@@ -163,7 +192,8 @@ export default function AdminComplianceLegalDocsPage() {
       name: form.name.trim(),
       documentStatus: form.documentStatus,
       issueDate: form.issueDate || null,
-      expiryDate: form.documentStatus === "ACTIVE" ? form.expiryDate : null,
+      expiryDate: form.documentStatus === "ACTIVE" && !form.expiryNotApplicable ? form.expiryDate : null,
+      expiryNotApplicable: form.documentStatus === "ACTIVE" ? form.expiryNotApplicable : false,
       remarks: form.remarks.trim() || null,
     };
 
@@ -182,7 +212,14 @@ export default function AdminComplianceLegalDocsPage() {
       return;
     }
 
-    setForm({ name: "", documentStatus: "ACTIVE", issueDate: "", expiryDate: "", remarks: "" });
+    setForm({
+      name: "",
+      documentStatus: "ACTIVE",
+      issueDate: "",
+      expiryDate: "",
+      expiryNotApplicable: false,
+      remarks: "",
+    });
     setEditingId(null);
     setStatus(editingId ? "Document updated." : "Document added.");
     await loadDocs(clientId);
@@ -229,7 +266,7 @@ export default function AdminComplianceLegalDocsPage() {
     }
 
     setImportFile(null);
-    setStatus(`Imported ${data?.data?.count || 0} records.`);
+    setStatus(`Imported ${data?.data?.importedCount ?? data?.data?.count ?? 0} records.`);
     await loadDocs(clientId);
     setImporting(false);
   }
@@ -241,6 +278,7 @@ export default function AdminComplianceLegalDocsPage() {
       documentStatus: normalizeDocumentStatus(doc.documentStatus),
       issueDate: doc.issueDate ? new Date(doc.issueDate).toISOString().slice(0, 10) : "",
       expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : "",
+      expiryNotApplicable: normalizeDocumentStatus(doc.documentStatus) === "ACTIVE" && !doc.expiryDate,
       remarks: doc.remarks || "",
     });
     setStatus("");
@@ -312,6 +350,7 @@ export default function AdminComplianceLegalDocsPage() {
                             ...prev,
                             documentStatus: e.target.value as LegalDoc["documentStatus"],
                             expiryDate: e.target.value === "ACTIVE" ? prev.expiryDate : "",
+                            expiryNotApplicable: e.target.value === "ACTIVE" ? prev.expiryNotApplicable : false,
                           }))
                         }
                         className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -341,9 +380,25 @@ export default function AdminComplianceLegalDocsPage() {
                         value={form.expiryDate}
                         onChange={(e) => setForm((prev) => ({ ...prev, expiryDate: e.target.value }))}
                         className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                        required={form.documentStatus === "ACTIVE"}
-                        disabled={form.documentStatus !== "ACTIVE"}
+                        required={form.documentStatus === "ACTIVE" && !form.expiryNotApplicable}
+                        disabled={form.documentStatus !== "ACTIVE" || form.expiryNotApplicable}
                       />
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={form.expiryNotApplicable}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              expiryNotApplicable: e.target.checked,
+                              expiryDate: e.target.checked ? "" : prev.expiryDate,
+                            }))
+                          }
+                          disabled={form.documentStatus !== "ACTIVE"}
+                          className="h-4 w-4 rounded border-slate-400 text-blue-700 focus:ring-blue-600"
+                        />
+                        Expiry is N/A (no expiry date)
+                      </label>
                     </label>
                   </div>
 
@@ -371,7 +426,14 @@ export default function AdminComplianceLegalDocsPage() {
                         type="button"
                         onClick={() => {
                           setEditingId(null);
-                          setForm({ name: "", documentStatus: "ACTIVE", issueDate: "", expiryDate: "", remarks: "" });
+                          setForm({
+                            name: "",
+                            documentStatus: "ACTIVE",
+                            issueDate: "",
+                            expiryDate: "",
+                            expiryNotApplicable: false,
+                            remarks: "",
+                          });
                         }}
                         className="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                       >
@@ -384,7 +446,7 @@ export default function AdminComplianceLegalDocsPage() {
                 <form onSubmit={importDocs} className="mt-6 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
                   <p className="font-bold text-slate-900 dark:text-white">Bulk import / export</p>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    Excel columns: Document Name, Document Status, Issue Date, Expiry Date, Remarks.
+                    Excel columns: Document Name, Document Status, Issue Date, Expiry Date, Expiry N/A, Remarks.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <input
@@ -449,10 +511,16 @@ export default function AdminComplianceLegalDocsPage() {
                                 ) : null}
                               </td>
                               <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                                {formatDocumentStatus(doc.documentStatus)}
+                                {formatDocumentStatus(getEffectiveDocumentStatus(doc))}
                               </td>
                               <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.issueDate)}</td>
-                              <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.expiryDate)}</td>
+                              <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                                {doc.expiryDate
+                                  ? formatDate(doc.expiryDate)
+                                  : normalizeDocumentStatus(doc.documentStatus) === "ACTIVE"
+                                    ? "N/A"
+                                    : "-"}
+                              </td>
                               <td className="px-4 py-3">
                                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusInfo.tone}`}>
                                   {statusInfo.label}

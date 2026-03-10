@@ -18,9 +18,10 @@ const createSchema = z.object({
   clientId: z.string().trim().min(1),
   name: z.string().trim().min(1),
   documentStatus: z.enum(COMPLIANCE_DOCUMENT_STATUS_VALUES).optional(),
-  issueDate: z.string().trim().optional().or(z.literal("")),
-  expiryDate: z.string().trim().optional().or(z.literal("")),
-  remarks: z.string().trim().optional().or(z.literal("")),
+  issueDate: z.string().trim().optional().nullable(),
+  expiryDate: z.string().trim().optional().nullable(),
+  expiryNotApplicable: z.boolean().optional(),
+  remarks: z.string().trim().optional().nullable(),
 });
 
 function toDocumentPayload(document: {
@@ -77,8 +78,9 @@ export async function POST(req: Request) {
   const documentStatus = normalizeComplianceDocumentStatus(parsed.data.documentStatus);
   const issueDate = parseDateInput(parsed.data.issueDate);
   const expiryDate = parseDateInput(parsed.data.expiryDate);
-  const nextExpiryDate = documentStatus === "ACTIVE" ? expiryDate : null;
-  if (documentStatus === "ACTIVE" && !expiryDate) {
+  const expiryNotApplicable = Boolean(parsed.data.expiryNotApplicable);
+  const nextExpiryDate = documentStatus === "ACTIVE" && !expiryNotApplicable ? expiryDate : null;
+  if (documentStatus === "ACTIVE" && !expiryNotApplicable && !expiryDate) {
     return fail("Expiry date is required", 400);
   }
 

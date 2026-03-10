@@ -6,7 +6,7 @@ import ClientSidebar from "@/components/ClientSidebar";
 type LegalDoc = {
   id: string;
   name: string;
-  documentStatus?: "ACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
+  documentStatus?: "ACTIVE" | "INACTIVE" | "NOT_APPLICABLE" | "NOT_AVAILABLE";
   issueDate: string | null;
   expiryDate: string | null;
   remarks: string | null;
@@ -41,6 +41,24 @@ function normalizeDocumentStatus(value: LegalDoc["documentStatus"]) {
 
 function formatDocumentStatus(value: LegalDoc["documentStatus"]) {
   return normalizeDocumentStatus(value).replace(/_/g, " ");
+}
+
+function isExpiredDate(value: string | null) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime() < today.getTime();
+}
+
+function getEffectiveDocumentStatus(document: Pick<LegalDoc, "documentStatus" | "expiryDate">) {
+  const status = normalizeDocumentStatus(document.documentStatus);
+  if (status === "ACTIVE" && isExpiredDate(document.expiryDate)) {
+    return "INACTIVE" as const;
+  }
+  return status;
 }
 
 export default function ClientComplianceLegalDocsPage() {
@@ -152,7 +170,9 @@ export default function ClientComplianceLegalDocsPage() {
                             <p className="font-semibold text-slate-900 dark:text-white">{doc.name}</p>
                             {doc.remarks ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{doc.remarks}</p> : null}
                           </td>
-                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDocumentStatus(doc.documentStatus)}</td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {formatDocumentStatus(getEffectiveDocumentStatus(doc))}
+                          </td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.issueDate)}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatDate(doc.expiryDate)}</td>
                           <td className="px-4 py-3">

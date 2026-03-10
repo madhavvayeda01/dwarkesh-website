@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     "Document Status": document.documentStatus,
     "Issue Date": formatDateForInput(document.issueDate),
     "Expiry Date": formatDateForInput(document.expiryDate),
+    "Expiry N/A": document.documentStatus === "ACTIVE" && !document.expiryDate ? "YES" : "NO",
     Remarks: document.remarks || "",
   }));
 

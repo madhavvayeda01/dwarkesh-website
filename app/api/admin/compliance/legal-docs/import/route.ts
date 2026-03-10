@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
+import { logger } from "@/lib/logger";
 import {
   normalizeComplianceDocumentStatus,
   normalizeOptionalString,
@@ -18,8 +19,25 @@ type ImportRow = {
   "Document Status"?: unknown;
   "Issue Date"?: unknown;
   "Expiry Date"?: unknown;
+  "Expiry N/A"?: unknown;
   Remarks?: unknown;
 };
+
+function parseBooleanLike(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    text === "true" ||
+    text === "yes" ||
+    text === "y" ||
+    text === "1" ||
+    text === "na" ||
+    text === "n/a"
+  );
+}
 
 export async function POST(req: Request) {
   const { error } = await requireAdmin();
@@ -51,30 +69,42 @@ export async function POST(req: Request) {
         const name = String(row["Document Name"] || "").trim();
         const documentStatus = normalizeComplianceDocumentStatus(row["Document Status"]);
         const expiryDate = parseDateInput(row["Expiry Date"]);
-        if (!name || (documentStatus === "ACTIVE" && !expiryDate)) return null;
+        if (!name) return null;
+        const expiryNotApplicable =
+          parseBooleanLike(row["Expiry N/A"]) ||
+          (documentStatus === "ACTIVE" && !expiryDate);
 
         return {
           clientId: parsed.data.clientId,
           name,
           documentStatus,
           issueDate: parseDateInput(row["Issue Date"]),
-          expiryDate: documentStatus === "ACTIVE" ? expiryDate : null,
+          expiryDate:
+            documentStatus === "ACTIVE" && !expiryNotApplicable ? expiryDate : null,
           remarks: normalizeOptionalString(row.Remarks),
         };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
     if (documents.length === 0) {
-      return fail("No valid legal document rows found. Required columns: Document Name and, for ACTIVE rows, Expiry Date", 400);
+      return fail(
+        "No valid legal document rows found. Required column: Document Name",
+        400
+      );
     }
 
     const created = await prisma.$transaction(
       documents.map((document) => prisma.complianceLegalDocument.create({ data: document }))
     );
 
-    return ok("Compliance legal docs imported", { importedCount: created.length }, 201);
+    return ok(
+      "Compliance legal docs imported",
+      { importedCount: created.length, count: created.length },
+      201
+    );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to import legal docs";
-    return fail(message, 500);
+    const message = err instanceof Error ? err.message : "Unknown import failure";
+    logger.error("admin.compliance.legal_docs.import.error", { message });
+    return fail("Failed to import legal docs", 500);
   }
 }

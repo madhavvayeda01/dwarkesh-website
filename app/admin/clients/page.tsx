@@ -200,6 +200,42 @@ export default function AdminClientsPage() {
     await loadClients();
   }
 
+  async function editClientEmail(client: ClientRecord) {
+    const nextRaw = window.prompt(`Update email for "${client.name}"`, client.email);
+    if (nextRaw === null) return;
+
+    const nextEmail = nextRaw.trim().toLowerCase();
+    if (!nextEmail) {
+      setStatus("Client email is required.");
+      return;
+    }
+
+    if (nextEmail === client.email.trim().toLowerCase()) {
+      setStatus("Client email is unchanged.");
+      return;
+    }
+
+    setActionClientId(client.id);
+    setStatus(`Updating email for ${client.name}...`);
+
+    const res = await fetch(`/api/admin/clients/${client.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: nextEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setStatus(data?.message || "Failed to update client email.");
+      setActionClientId("");
+      return;
+    }
+
+    setStatus(data?.message || "Client email updated.");
+    setActionClientId("");
+    await loadClients();
+  }
+
   return (
     <div className="flex min-h-screen bg-[linear-gradient(180deg,#dfe7f1_0%,#eef3f8_100%)]">
       <Sidebar />
@@ -430,6 +466,13 @@ export default function AdminClientsPage() {
                           </div>
 
                           <div className="flex shrink-0 flex-wrap gap-3">
+                            <button
+                              onClick={() => editClientEmail(client)}
+                              disabled={isBusy}
+                              className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-200 disabled:opacity-60"
+                            >
+                              Edit Email
+                            </button>
                             <button
                               onClick={() => loginAsClient(client.id)}
                               disabled={isBusy}

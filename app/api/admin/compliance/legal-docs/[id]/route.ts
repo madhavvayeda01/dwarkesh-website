@@ -13,9 +13,10 @@ import {
 const updateSchema = z.object({
   name: z.string().trim().min(1),
   documentStatus: z.enum(COMPLIANCE_DOCUMENT_STATUS_VALUES).optional(),
-  issueDate: z.string().trim().optional().or(z.literal("")),
-  expiryDate: z.string().trim().optional().or(z.literal("")),
-  remarks: z.string().trim().optional().or(z.literal("")),
+  issueDate: z.string().trim().optional().nullable(),
+  expiryDate: z.string().trim().optional().nullable(),
+  expiryNotApplicable: z.boolean().optional(),
+  remarks: z.string().trim().optional().nullable(),
 });
 
 function toDocumentPayload(document: {
@@ -56,8 +57,9 @@ export async function PUT(
   const documentStatus = normalizeComplianceDocumentStatus(parsed.data.documentStatus);
   const issueDate = parseDateInput(parsed.data.issueDate);
   const expiryDate = parseDateInput(parsed.data.expiryDate);
-  const nextExpiryDate = documentStatus === "ACTIVE" ? expiryDate : null;
-  if (documentStatus === "ACTIVE" && !expiryDate) return fail("Expiry date is required", 400);
+  const expiryNotApplicable = Boolean(parsed.data.expiryNotApplicable);
+  const nextExpiryDate = documentStatus === "ACTIVE" && !expiryNotApplicable ? expiryDate : null;
+  if (documentStatus === "ACTIVE" && !expiryNotApplicable && !expiryDate) return fail("Expiry date is required", 400);
 
   try {
     const document = await prisma.complianceLegalDocument.update({
@@ -73,8 +75,8 @@ export async function PUT(
 
     return ok("Compliance legal doc updated", { document: toDocumentPayload(document) });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update legal doc";
-    return fail(message, 500);
+    void err;
+    return fail("Failed to update legal doc", 500);
   }
 }
 
@@ -96,7 +98,7 @@ export async function DELETE(
     });
     return ok("Compliance legal doc deleted", { id: params.id });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete legal doc";
-    return fail(message, 500);
+    void err;
+    return fail("Failed to delete legal doc", 500);
   }
 }

@@ -6,6 +6,7 @@ import { useState } from "react";
 export default function SignInPage() {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -18,7 +19,7 @@ export default function SignInPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernameOrEmail, password }),
+        body: JSON.stringify({ usernameOrEmail, password, rememberMe }),
       });
 
       const data = await res.json();
@@ -130,6 +131,16 @@ export default function SignInPage() {
                 required
               />
             </div>
+
+            <label className="inline-flex items-center gap-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-900 focus:ring-blue-500"
+              />
+              Remember me
+            </label>
 
             <button
               type="submit"

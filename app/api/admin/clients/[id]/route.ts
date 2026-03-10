@@ -5,9 +5,13 @@ import { fail, ok } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/auth-guards";
 import { logger } from "@/lib/logger";
 import { passwordSchema } from "@/lib/password-policy";
+import { isMissingColumnError, isMissingTableError } from "@/lib/prisma-compat";
 
-const updatePasswordSchema = z.object({
-  password: passwordSchema,
+const updateClientSchema = z.object({
+  password: passwordSchema.optional(),
+  email: z.string().trim().email("Enter a valid client email.").optional(),
+}).refine((value) => Boolean(value.password || value.email), {
+  message: "No client changes provided.",
 });
 
 export async function DELETE(
@@ -24,7 +28,7 @@ export async function DELETE(
     return ok("Client deleted", null);
   } catch (err: any) {
     logger.error("admin.client.delete.error", { message: err?.message });
-    return fail(err?.message || "Failed to delete client", 500);
+    return fail("Failed to delete client", 500);
   }
 }
 
@@ -37,32 +41,107 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const parsed = updatePasswordSchema.safeParse(await req.json());
+    const parsed = updateClientSchema.safeParse(await req.json());
     if (!parsed.success) {
-      return fail("Password required", 400, parsed.error.flatten());
+      return fail("Invalid client update payload", 400, parsed.error.flatten());
     }
 
-    const hashed = await bcrypt.hash(parsed.data.password, 10);
-    await prisma.$transaction([
-      prisma.client.update({
+    const nextEmail = parsed.data.email?.trim().toLowerCase();
+    if (nextEmail) {
+      const existingClient = await prisma.client.findUnique({
+        where: { email: nextEmail },
+        select: { id: true },
+      });
+      if (existingClient && existingClient.id !== id) {
+        return fail("A client with this email already exists.", 409);
+      }
+
+      const existingConsultant = await prisma.consultant.findUnique({
+        where: { email: nextEmail },
+        select: { id: true },
+      });
+      if (existingConsultant) {
+        return fail("This email is already being used by a consultant account.", 409);
+      }
+    }
+
+    const hashed = parsed.data.password
+      ? await bcrypt.hash(parsed.data.password, 10)
+      : null;
+
+    if (hashed) {
+      try {
+        await prisma.client.update({
+          where: { id },
+          data: {
+            ...(nextEmail ? { email: nextEmail } : {}),
+            password: hashed,
+            sessionVersion: { increment: 1 },
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        if (!isMissingColumnError(error, "Client", "sessionVersion")) {
+          throw error;
+        }
+        await prisma.client.update({
+          where: { id },
+          data: {
+            ...(nextEmail ? { email: nextEmail } : {}),
+            password: hashed,
+          },
+          select: { id: true },
+        });
+      }
+      await clearClientResetTokensIfAvailable(id);
+    } else {
+      await prisma.client.update({
         where: { id },
         data: {
-          password: hashed,
-          sessionVersion: { increment: 1 },
+          email: nextEmail,
         },
-      }),
-      prisma.passwordResetToken.deleteMany({
-        where: {
-          accountType: "CLIENT",
-          accountId: id,
-        },
-      }),
-    ]);
+        select: { id: true },
+      });
+    }
 
-    logger.info("admin.client.password_update.success", { clientId: id });
-    return ok("Password updated", null);
+    if (hashed && nextEmail) {
+      logger.info("admin.client.credentials_update.success", { clientId: id, email: nextEmail });
+      return ok("Client email and password updated", null);
+    }
+
+    if (hashed) {
+      logger.info("admin.client.password_update.success", { clientId: id });
+      return ok("Password updated", null);
+    }
+
+    logger.info("admin.client.email_update.success", { clientId: id, email: nextEmail });
+    return ok("Client email updated", null);
   } catch (err: any) {
-    logger.error("admin.client.password_update.error", { message: err?.message });
-    return fail(err?.message || "Failed to update password", 500);
+    if (err?.code === "P2025") {
+      return fail("Client not found", 404);
+    }
+    if (err?.code === "P2002") {
+      return fail("A client with this email already exists.", 409);
+    }
+
+    logger.error("admin.client.update.error", { message: err?.message });
+    return fail("Failed to update client", 500);
+  }
+}
+
+async function clearClientResetTokensIfAvailable(clientId: string) {
+  try {
+    await prisma.passwordResetToken.deleteMany({
+      where: {
+        accountType: "CLIENT",
+        accountId: clientId,
+      },
+    });
+  } catch (error) {
+    if (isMissingTableError(error, "PasswordResetToken")) {
+      logger.warn("admin.client.password_reset_store_missing", { clientId });
+      return;
+    }
+    throw error;
   }
 }

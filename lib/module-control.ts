@@ -24,6 +24,12 @@ type ModuleControlRow = {
   pageAccess?: unknown;
 } | null | undefined;
 
+export type ClientAccessSnapshot = {
+  modules: ModuleAccessMap;
+  storedPages: PageAccessMap;
+  effectivePages: PageAccessMap;
+};
+
 export { MODULE_KEYS, MODULE_LABELS, DEFAULT_MODULE_ACCESS, CLIENT_PAGE_DEFINITIONS } from "@/lib/module-config";
 export type { ModuleKey, ModuleAccessMap, ClientPageKey, PageAccessMap } from "@/lib/module-config";
 
@@ -116,21 +122,21 @@ export async function ensureClientModuleControl(clientId: string) {
 }
 
 export async function getClientModuleAccess(clientId: string): Promise<ModuleAccessMap> {
-  const row = await prisma.moduleControl.findUnique({
-    where: { clientId },
-  });
-  return toModuleAccessMap(row);
+  const snapshot = await getClientAccessSnapshot(clientId);
+  return snapshot.modules;
 }
 
 export async function getStoredClientPageAccess(clientId: string): Promise<PageAccessMap> {
-  const row = await prisma.moduleControl.findUnique({
-    where: { clientId },
-    select: { pageAccess: true },
-  });
-  return toStoredPageAccessMap(row?.pageAccess);
+  const snapshot = await getClientAccessSnapshot(clientId);
+  return snapshot.storedPages;
 }
 
 export async function getClientPageAccess(clientId: string): Promise<PageAccessMap> {
+  const snapshot = await getClientAccessSnapshot(clientId);
+  return snapshot.effectivePages;
+}
+
+export async function getClientAccessSnapshot(clientId: string): Promise<ClientAccessSnapshot> {
   const row = await prisma.moduleControl.findUnique({
     where: { clientId },
     select: {
@@ -149,8 +155,13 @@ export async function getClientPageAccess(clientId: string): Promise<PageAccessM
   });
 
   const modules = toModuleAccessMap(row);
-  const pages = toStoredPageAccessMap(row?.pageAccess);
-  return toEffectivePageAccessMap(pages, modules);
+  const storedPages = toStoredPageAccessMap(row?.pageAccess);
+  const effectivePages = toEffectivePageAccessMap(storedPages, modules);
+  return {
+    modules,
+    storedPages,
+    effectivePages,
+  };
 }
 
 export async function isClientModuleEnabled(clientId: string, moduleKey: ModuleKey): Promise<boolean> {

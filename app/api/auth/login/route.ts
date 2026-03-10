@@ -3,11 +3,13 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { fail, ok } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
-import { setSessionCookie, signJwt } from "@/lib/auth";
+import { REMEMBER_ME_MAX_AGE_SECONDS, setSessionCookie, signJwt } from "@/lib/auth";
+import { isMissingColumnError } from "@/lib/prisma-compat";
 
 const loginSchema = z.object({
   usernameOrEmail: z.string().trim().min(1),
   password: z.string().min(1),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 export async function POST(req: Request) {
@@ -17,8 +19,12 @@ export async function POST(req: Request) {
       return fail("Username/Email and password are required", 400, parsed.error.flatten());
     }
 
-    const { usernameOrEmail, password } = parsed.data;
+    const { usernameOrEmail, password, rememberMe } = parsed.data;
     const normalizedIdentifier = usernameOrEmail.trim().toLowerCase();
+    const tokenTtlSeconds = rememberMe ? REMEMBER_ME_MAX_AGE_SECONDS : undefined;
+    const cookieOptions = rememberMe
+      ? { persistent: true, maxAgeSeconds: REMEMBER_ME_MAX_AGE_SECONDS }
+      : { persistent: false as const };
 
     if (
       usernameOrEmail === process.env.ADMIN_USERNAME &&
@@ -30,20 +36,16 @@ export async function POST(req: Request) {
         adminType: "env_admin",
         adminName: "Primary Admin",
         adminEmail: process.env.ADMIN_USERNAME || "admin",
-      });
+      }, tokenTtlSeconds);
       const res = ok("Login successful", { role: "admin", redirectTo: "/admin" });
-      setSessionCookie(res, token);
+      setSessionCookie(res, token, cookieOptions);
       logger.info("auth.login.success", { role: "admin", usernameOrEmail });
       return res;
     }
 
     const [consultant, client] = await Promise.all([
-      prisma.consultant.findUnique({
-        where: { email: normalizedIdentifier },
-      }),
-      prisma.client.findUnique({
-        where: { email: normalizedIdentifier },
-      }),
+      findConsultantForLogin(normalizedIdentifier),
+      findClientForLogin(normalizedIdentifier),
     ]);
 
     if (consultant && client) {
@@ -67,13 +69,13 @@ export async function POST(req: Request) {
         adminType: "consultant",
         adminName: consultant.name,
         adminEmail: consultant.email,
-        sessionVersion: consultant.sessionVersion,
-      });
+        sessionVersion: consultant.sessionVersion ?? 1,
+      }, tokenTtlSeconds);
       const res = ok("Login successful", {
         role: "admin",
         redirectTo: "/admin",
       });
-      setSessionCookie(res, token);
+      setSessionCookie(res, token, cookieOptions);
       logger.info("auth.login.success", { role: "consultant", consultantId: consultant.id });
       return res;
     }
@@ -109,19 +111,79 @@ export async function POST(req: Request) {
       sub: client.id,
       role: "client",
       clientId: client.id,
-      sessionVersion: client.sessionVersion,
-    });
+      sessionVersion: client.sessionVersion ?? 1,
+    }, tokenTtlSeconds);
     const res = ok("Login successful", {
       role: "client",
       clientId: client.id,
       redirectTo: "/client-dashboard",
     });
-    setSessionCookie(res, token);
+    setSessionCookie(res, token, cookieOptions);
     logger.info("auth.login.success", { role: "client", clientId: client.id });
     return res;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Login failed";
     logger.error("auth.login.error", { message });
-    return fail(message, 500);
+    return fail("Login failed", 500);
+  }
+}
+
+async function findConsultantForLogin(email: string) {
+  try {
+    return await prisma.consultant.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        active: true,
+        sessionVersion: true,
+      },
+    });
+  } catch (error) {
+    if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+      throw error;
+    }
+
+    const legacy = await prisma.consultant.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        active: true,
+      },
+    });
+    return legacy ? { ...legacy, sessionVersion: 1 } : null;
+  }
+}
+
+async function findClientForLogin(email: string) {
+  try {
+    return await prisma.client.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        sessionVersion: true,
+      },
+    });
+  } catch (error) {
+    if (!isMissingColumnError(error, "Client", "sessionVersion")) {
+      throw error;
+    }
+
+    const legacy = await prisma.client.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+      },
+    });
+    return legacy ? { ...legacy, sessionVersion: 1 } : null;
   }
 }

@@ -17,9 +17,44 @@ function applyEnvLayer(fileName: string, currentLayer?: Record<string, string>) 
   return parsed;
 }
 
+function describeDatabaseTarget(rawUrl?: string) {
+  if (!rawUrl) return "DATABASE_URL is not set";
+  try {
+    const parsed = new URL(rawUrl);
+    const dbName = parsed.pathname.replace(/^\/+/, "") || "(default)";
+    const port = parsed.port ? `:${parsed.port}` : "";
+    return `${parsed.protocol}//${parsed.hostname}${port}/${dbName}`;
+  } catch {
+    return "DATABASE_URL is set but could not be parsed";
+  }
+}
+
 // Precedence: shell env > .env.local > .env
 const baseLayer = applyEnvLayer(".env");
-applyEnvLayer(".env.local", baseLayer);
+const localLayer = applyEnvLayer(".env.local", baseLayer);
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error(
+    "DATABASE_URL is not configured. Set it in shell, .env.local, or .env."
+  );
+}
+
+if (process.env.NODE_ENV !== "production") {
+  const source = localLayer.DATABASE_URL
+    ? ".env.local"
+    : baseLayer.DATABASE_URL
+      ? ".env"
+      : "shell";
+  if (source !== ".env.local") {
+    console.warn(
+      `[prisma.config] Using DATABASE_URL from ${source}. Add DATABASE_URL to .env.local to avoid target drift.`
+    );
+  }
+  console.info(
+    `[prisma.config] Prisma datasource target: ${describeDatabaseTarget(databaseUrl)}`
+  );
+}
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -27,7 +62,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DATABASE_URL!,
+    url: databaseUrl,
     directUrl: process.env.DIRECT_URL,
   },
 });

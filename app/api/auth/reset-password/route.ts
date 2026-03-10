@@ -25,24 +25,30 @@ const resetPasswordSchema = z
   });
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const parsed = tokenSchema.safeParse({
-    token: url.searchParams.get("token"),
-  });
+  try {
+    const url = new URL(req.url);
+    const parsed = tokenSchema.safeParse({
+      token: url.searchParams.get("token"),
+    });
 
-  if (!parsed.success) {
-    return fail("Reset link is invalid or incomplete.", 400, parsed.error.flatten());
+    if (!parsed.success) {
+      return fail("Reset link is invalid or incomplete.", 400, parsed.error.flatten());
+    }
+
+    await cleanupExpiredPasswordResetTokens();
+    const token = await validatePasswordResetToken(parsed.data.token);
+    if (!token) {
+      return fail("This reset link is invalid or has expired.", 400);
+    }
+
+    return ok("Reset link is valid.", {
+      expiresAt: token.expiresAt.toISOString(),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Reset token validation failed";
+    logger.error("auth.password_reset.validate_error", { message });
+    return fail("Failed to validate reset link.", 500);
   }
-
-  await cleanupExpiredPasswordResetTokens();
-  const token = await validatePasswordResetToken(parsed.data.token);
-  if (!token) {
-    return fail("This reset link is invalid or has expired.", 400);
-  }
-
-  return ok("Reset link is valid.", {
-    expiresAt: token.expiresAt.toISOString(),
-  });
 }
 
 export async function POST(req: Request) {

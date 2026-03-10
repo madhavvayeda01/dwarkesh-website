@@ -19,6 +19,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local backup/scratch folders:
+    "_deploy_fix/**",
+    "_redeploy_full/**",
+    "backups/**",
+    ".idea/**",
   ]),
 ]);
 

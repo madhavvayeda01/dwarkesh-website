@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
+import { isMissingColumnError } from "@/lib/prisma-compat";
 
 type Role = "admin" | "client";
 
@@ -18,7 +19,13 @@ export type SessionPayload = {
 };
 
 const COOKIE_NAME = "session_token";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+export const REMEMBER_ME_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+type SessionCookieOptions = {
+  persistent?: boolean;
+  maxAgeSeconds?: number;
+};
 
 function b64url(input: Buffer | string) {
   return Buffer.from(input)
@@ -49,10 +56,13 @@ function getSecret() {
   throw new Error("JWT_SECRET or ADMIN_PASSWORD must be configured for session signing.");
 }
 
-export function signJwt(payload: Omit<SessionPayload, "exp">) {
+export function signJwt(
+  payload: Omit<SessionPayload, "exp">,
+  ttlSeconds: number = DEFAULT_MAX_AGE_SECONDS
+) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "HS256", typ: "JWT" };
-  const body: SessionPayload = { ...payload, exp: now + MAX_AGE_SECONDS };
+  const body: SessionPayload = { ...payload, exp: now + ttlSeconds };
   const encoded = `${b64urlJson(header)}.${b64urlJson(body)}`;
   const sig = createHmac("sha256", getSecret()).update(encoded).digest();
   return `${encoded}.${b64url(sig)}`;
@@ -84,36 +94,65 @@ export async function getSessionFromCookies() {
 
   if (payload.role === "client" && payload.clientId) {
     const { prisma } = await import("@/lib/prisma");
-    const client = await prisma.client.findUnique({
-      where: { id: payload.clientId },
-      select: { sessionVersion: true },
-    });
-    if (!client) return null;
-    if (client.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
-    return payload;
+    try {
+      const client = await prisma.client.findUnique({
+        where: { id: payload.clientId },
+        select: { sessionVersion: true },
+      });
+      if (!client) return null;
+      if (client.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+      return payload;
+    } catch (error) {
+      if (!isMissingColumnError(error, "Client", "sessionVersion")) {
+        throw error;
+      }
+      const client = await prisma.client.findUnique({
+        where: { id: payload.clientId },
+        select: { id: true },
+      });
+      return client ? payload : null;
+    }
   }
 
   if (payload.role === "admin" && payload.adminType === "consultant" && payload.adminId) {
     const { prisma } = await import("@/lib/prisma");
-    const consultant = await prisma.consultant.findUnique({
-      where: { id: payload.adminId },
-      select: { active: true, sessionVersion: true },
-    });
-    if (!consultant?.active) return null;
-    if (consultant.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
-    return payload;
+    try {
+      const consultant = await prisma.consultant.findUnique({
+        where: { id: payload.adminId },
+        select: { active: true, sessionVersion: true },
+      });
+      if (!consultant?.active) return null;
+      if (consultant.sessionVersion !== (payload.sessionVersion ?? 1)) return null;
+      return payload;
+    } catch (error) {
+      if (!isMissingColumnError(error, "Consultant", "sessionVersion")) {
+        throw error;
+      }
+      const consultant = await prisma.consultant.findUnique({
+        where: { id: payload.adminId },
+        select: { active: true },
+      });
+      return consultant?.active ? payload : null;
+    }
   }
 
   return payload;
 }
 
-export function setSessionCookie(response: NextResponse, token: string) {
+export function setSessionCookie(
+  response: NextResponse,
+  token: string,
+  options?: SessionCookieOptions
+) {
+  const persistent = options?.persistent ?? true;
+  const maxAgeSeconds = options?.maxAgeSeconds ?? DEFAULT_MAX_AGE_SECONDS;
+
   response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     path: "/",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: MAX_AGE_SECONDS,
+    ...(persistent ? { maxAge: maxAgeSeconds } : {}),
   });
 }
 

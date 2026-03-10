@@ -69,7 +69,7 @@ export async function PUT(req: Request) {
 
     return ok("Client profile updated", { client });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update client profile";
-    return fail(message, 500);
+    void err;
+    return fail("Failed to update client profile", 500);
   }
 }
